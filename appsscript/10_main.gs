@@ -4,7 +4,7 @@ function runWMGJ() {
 
     processarGmailWMGJ();
 
-    // ETAPAS FINANCEIRAS (já existentes no seu projeto)
+    // ETAPAS FINANCEIRAS (já existentes no projeto)
     if (typeof importarArquivosFinanceirosPDFExcel === 'function') {
       importarArquivosFinanceirosPDFExcel();
     }
@@ -13,12 +13,22 @@ function runWMGJ() {
       classificarLancamentosFinanceiros();
     }
 
+    // IA AUTÔNOMA: classifica desconhecidos e analisa divergências.
+    if (typeof executarIAAutonomaWMGJ === 'function') {
+      executarIAAutonomaWMGJ();
+    }
+
     if (typeof atualizarResultadoFinanceiro === 'function') {
       atualizarResultadoFinanceiro();
     }
 
     if (typeof conciliacaoCompletaWMGJ === 'function') {
       conciliacaoCompletaWMGJ();
+    }
+
+    // Segunda passada de IA após conciliação, para analisar divergências recém-geradas.
+    if (typeof analisarConciliacaoComIAWMGJ === 'function') {
+      analisarConciliacaoComIAWMGJ();
     }
 
     if (typeof atualizarDashboardFinanceiro === 'function') {
