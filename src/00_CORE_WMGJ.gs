@@ -1,132 +1,294 @@
-const CONFIG = {
-  SPREADSHEET_ID: "15LgI2U2dtM7vnrxFsiQMPTvBapBDg5ftgGttx7Pw0Cw",
-  PASTA_RAIZ_ID: "1womnmIbaNQ8qkNlnkS2Ni71LVwtdrNj5",
-  PASTA_ENTRADA_ID: "1Gz0GtUfvKezI8OmAH0h8fkNLlqEzfYU-",
-  SHEETS: {
-    CADASTRO: "01_CADASTRO_ARQUIVOS",
-    PRODUTIVIDADE: "02_PRODUTIVIDADE_MENSAL",
-    FINANCEIRO: "05_FINANCEIRO_MENSAL",
-    NFSE: "06_NFS_E",
-    DASHBOARD: "09_INDICADORES_DASHBOARD",
-    LOG: "10_LOG_AUTOMACAO",
-    REGRAS: "10_AUTOMACOES_REGRAS",
-    PENDENCIAS: "11_PENDENCIAS_SANEAMENTO",
-    MEMORIA: "14_MEMORIA_BASE_DOCUMENTOS",
-    FILA: "15_FILA_PROCESSAMENTO"
-  },
-  GMAIL: {
-    IMPORTAR: "WMGJ_IMPORTAR",
-    PROCESSADO: "WMGJ_PROCESSADO"
-  }
-};
+function getConfigWMGJ_() {
+  return {
+    SPREADSHEET_ID: "15LgI2U2dtM7vnrxFsiQMPTvBapBDg5ftgGttx7Pw0Cw",
+    WEBAPP_URL: "https://script.google.com/macros/s/AKfycbwqoyfMxLs4p_IRxEmt-Uo9OUF9q8LmJ84T4ydwGWx4yqrMOoxYy_3Q3NdtGPAQ-Ivc/exec",
+    PASTA_RAIZ_ID: "1womnmIbaNQ8qkNlnkS2Ni71LVwtdrNj5",
+    PASTA_ENTRADA_ID: "1Gz0GtUfvKezI8OmAH0h8fkNLlqEzfYU-",
+    SHEETS: {
+      CADASTRO: "01_CADASTRO_ARQUIVOS",
+      PRODUTIVIDADE: "02_PRODUTIVIDADE_MENSAL",
+      FINANCEIRO: "05_FINANCEIRO_MENSAL",
+      NFSE: "06_NFS_E",
+      DASHBOARD: "09_INDICADORES_DASHBOARD",
+      LOG: "10_LOG_AUTOMACAO",
+      REGRAS: "10_AUTOMACOES_REGRAS",
+      PENDENCIAS: "11_PENDENCIAS_SANEAMENTO",
+      MEMORIA: "14_MEMORIA_BASE_DOCUMENTOS",
+      FILA: "15_FILA_PROCESSAMENTO"
+    },
+    GMAIL: {
+      IMPORTAR: "WMGJ_IMPORTAR",
+      PROCESSADO: "WMGJ_PROCESSADO"
+    }
+  };
+}
 
 function getPlanilha() {
-  return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
+  var cfg = getConfigWMGJ_();
+  return SpreadsheetApp.openById(cfg.SPREADSHEET_ID);
 }
 
 function doPost(e) {
   try {
-    const payload = JSON.parse((e && e.postData && e.postData.contents) || "{}");
-    const resultado = executarComandoWMGJ(payload);
+    var contents = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
+    var payload = JSON.parse(contents);
+    var resultado = executarComandoWMGJ(payload || {});
     return respostaJson_(resultado);
   } catch (erro) {
-    registrarLog("ERRO_DOPOST", erro.message || String(erro));
-    return respostaJson_({ ok: false, etapa: "doPost", erro: erro.message || String(erro) });
+    registrarLogWMGJ_("ERRO", "doPost", "AppsScript", erro && erro.message ? erro.message : String(erro));
+    return respostaJson_({
+      ok: false,
+      etapa: "doPost",
+      erro: erro && erro.message ? erro.message : String(erro)
+    });
   }
 }
 
 function executarComandoWMGJ(payload) {
-  const comando = String(payload.comando || "").trim();
-  if (comando === "status") return { ok: true, resposta: obterStatusWMGJ() };
+  payload = payload || {};
+  var comando = String(payload.comando || "").trim();
+
+  if (comando === "status") return obterStatusWMGJ();
   if (comando === "teste_execucao") return testarExecucaoWMGJ(payload);
   if (comando === "run" || comando === "runWMGJ" || comando === "operacao_total") return runWMGJ();
   if (comando === "gmail" || comando === "gmail_bancario") return importarGmailWMGJ();
   if (comando === "organizar") return organizarPastasWMGJ();
   if (comando === "dashboard") return atualizarDashboardWMGJ();
-  return { ok: false, erro: "Comando não reconhecido", comando: comando };
+  if (comando === "conciliar" && typeof conciliacaoCompletaWMGJ === "function") return conciliacaoCompletaWMGJ();
+
+  registrarLogWMGJ_("ERRO", comando || "SEM_COMANDO", payload.origem || "", "Comando não reconhecido");
+  return {
+    ok: false,
+    erro: "Comando não reconhecido",
+    comando: comando
+  };
 }
 
 function runWMGJ() {
-  registrarLog("INICIO_ROBO", "Execução central iniciada");
-  const resultados = [];
-  resultados.push(organizarPastasWMGJ());
-  resultados.push(importarGmailWMGJ());
-  resultados.push(atualizarDashboardWMGJ());
-  registrarLog("FIM_ROBO", "Execução central concluída");
-  return { ok: true, comando: "runWMGJ", resultados: resultados };
+  var resultados = [];
+
+  try {
+    registrarLogWMGJ_("INICIO", "runWMGJ", "AppsScript", "Pipeline iniciado");
+
+    if (typeof organizarPastasWMGJ === "function") resultados.push(organizarPastasWMGJ());
+    if (typeof importarGmailWMGJ === "function") resultados.push(importarGmailWMGJ());
+    if (typeof importarArquivosFinanceirosPDFExcel === "function") resultados.push(importarArquivosFinanceirosPDFExcel());
+    if (typeof classificarLancamentosFinanceiros === "function") resultados.push(classificarLancamentosFinanceiros());
+    if (typeof executarIAAutonomaWMGJ === "function") resultados.push(executarIAAutonomaWMGJ());
+    if (typeof atualizarResultadoFinanceiro === "function") resultados.push(atualizarResultadoFinanceiro());
+    if (typeof conciliacaoCompletaWMGJ === "function") resultados.push(conciliacaoCompletaWMGJ());
+    if (typeof analisarConciliacaoComIAWMGJ === "function") resultados.push(analisarConciliacaoComIAWMGJ());
+    if (typeof atualizarDashboardFinanceiro === "function") resultados.push(atualizarDashboardFinanceiro());
+    if (typeof atualizarDashboardWMGJ === "function") resultados.push(atualizarDashboardWMGJ());
+
+    registrarLogWMGJ_("FIM", "runWMGJ", "AppsScript", "Pipeline finalizado");
+
+    return {
+      ok: true,
+      comando: "runWMGJ",
+      resultados: resultados
+    };
+  } catch (erro) {
+    registrarLogWMGJ_("ERRO", "runWMGJ", "AppsScript", erro && erro.message ? erro.message : String(erro));
+    return {
+      ok: false,
+      comando: "runWMGJ",
+      erro: erro && erro.message ? erro.message : String(erro)
+    };
+  }
+}
+
+function testarExecucaoWMGJ(payload) {
+  payload = payload || {};
+
+  registrarLogWMGJ_(
+    "TESTE_OK",
+    payload.comando || "teste_execucao",
+    payload.origem || "ChatGPT",
+    "Pipeline respondeu corretamente sem alterar base financeira"
+  );
+
+  return {
+    ok: true,
+    comando: payload.comando || "teste_execucao",
+    status: "TESTE_OK",
+    mensagem: "Webhook, Apps Script e Sheets responderam corretamente",
+    escrita: getConfigWMGJ_().SHEETS.LOG
+  };
+}
+
+function garantirAbaLogAutomacaoWMGJ() {
+  var cfg = getConfigWMGJ_();
+  var ss = getPlanilha();
+  var header = ["Data/Hora", "Status", "Comando", "Origem", "Mensagem"];
+  var aba = ss.getSheetByName(cfg.SHEETS.LOG);
+
+  if (!aba) {
+    aba = ss.insertSheet(cfg.SHEETS.LOG);
+  }
+
+  if (aba.getLastRow() === 0) {
+    aba.appendRow(header);
+    return aba;
+  }
+
+  var largura = Math.max(header.length, aba.getLastColumn());
+  var primeiraLinha = aba.getRange(1, 1, 1, largura).getValues()[0];
+  var headerAtual = primeiraLinha.slice(0, header.length).join("|");
+  var headerEsperado = header.join("|");
+
+  if (headerAtual !== headerEsperado) {
+    aba.insertRowsBefore(1, 1);
+    aba.getRange(1, 1, 1, header.length).setValues([header]);
+  }
+
+  return aba;
+}
+
+function registrarLogWMGJ_(status, comando, origem, mensagem) {
+  var aba = garantirAbaLogAutomacaoWMGJ();
+  aba.appendRow([
+    new Date(),
+    status || "INFO",
+    comando || "",
+    origem || "AppsScript",
+    mensagem || ""
+  ]);
+}
+
+function registrarLogWMGJ(status, comando, origem, mensagem) {
+  registrarLogWMGJ_(status, comando, origem, mensagem);
+}
+
+function registrarLog(evento, detalhe) {
+  registrarLogWMGJ_("INFO", evento || "", "AppsScript", detalhe || "");
+}
+
+function obterStatusWMGJ() {
+  var cfg = getConfigWMGJ_();
+  var ss = getPlanilha();
+  var sheets = ss.getSheets().map(function(sheet) {
+    return sheet.getName();
+  });
+
+  return {
+    ok: true,
+    status: "ONLINE",
+    sistema: "WMGJ",
+    planilha: ss.getName(),
+    abas: sheets.length,
+    log: cfg.SHEETS.LOG,
+    gmailImportar: cfg.GMAIL.IMPORTAR,
+    gmailProcessado: cfg.GMAIL.PROCESSADO,
+    atualizadoEm: new Date().toISOString()
+  };
 }
 
 function importarGmailWMGJ() {
+  var cfg = getConfigWMGJ_();
   garantirLabelsGmail_();
-  const ss = getPlanilha();
-  const fila = obterOuCriarAba_(ss, CONFIG.SHEETS.FILA, ["DATA_ENTRADA", "ORIGEM", "ID_ORIGEM", "NOME", "TIPO", "STATUS", "OBSERVACAO"]);
-  const memoria = obterOuCriarAba_(ss, CONFIG.SHEETS.MEMORIA, ["DATA_REGISTRO", "ORIGEM", "ID_ORIGEM", "NOME", "HASH", "STATUS", "RESUMO"]);
-  const ids = carregarIds_(memoria, 2);
-  const labelImportar = GmailApp.getUserLabelByName(CONFIG.GMAIL.IMPORTAR);
-  const labelProcessado = GmailApp.getUserLabelByName(CONFIG.GMAIL.PROCESSADO);
-  const threads = labelImportar ? labelImportar.getThreads(0, 50) : [];
-  let importados = 0;
-  threads.forEach(thread => {
-    thread.getMessages().forEach(msg => {
-      const id = msg.getId();
+
+  var ss = getPlanilha();
+  var fila = obterOuCriarAba_(ss, cfg.SHEETS.FILA, ["DATA_ENTRADA", "ORIGEM", "ID_ORIGEM", "NOME", "TIPO", "STATUS", "OBSERVACAO"]);
+  var memoria = obterOuCriarAba_(ss, cfg.SHEETS.MEMORIA, ["DATA_REGISTRO", "ORIGEM", "ID_ORIGEM", "NOME", "HASH", "STATUS", "RESUMO"]);
+  var ids = carregarIds_(memoria, 2);
+  var labelImportar = GmailApp.getUserLabelByName(cfg.GMAIL.IMPORTAR);
+  var labelProcessado = GmailApp.getUserLabelByName(cfg.GMAIL.PROCESSADO);
+  var threads = labelImportar ? labelImportar.getThreads(0, 50) : [];
+  var importados = 0;
+
+  threads.forEach(function(thread) {
+    thread.getMessages().forEach(function(msg) {
+      var id = msg.getId();
       if (ids.has(id)) return;
-      const assunto = msg.getSubject();
-      const anexos = msg.getAttachments() || [];
+
+      var assunto = msg.getSubject();
+      var anexos = msg.getAttachments() || [];
+
       fila.appendRow([new Date(), "GMAIL", id, assunto, "EMAIL", "PENDENTE", "Mensagem importada"]);
       memoria.appendRow([new Date(), "GMAIL", id, assunto, "", "IMPORTADO", msg.getFrom()]);
-      anexos.forEach(anexo => salvarAnexoGmail_(anexo, id, fila, memoria));
+
+      anexos.forEach(function(anexo) {
+        salvarAnexoGmail_(anexo, id, fila, memoria);
+      });
+
       msg.addLabel(labelProcessado);
       importados++;
     });
+
     thread.removeLabel(labelImportar);
   });
-  registrarLog("GMAIL_IMPORTADO", "Mensagens importadas: " + importados);
-  return { ok: true, etapa: "gmail", importados: importados };
+
+  registrarLogWMGJ_("OK", "gmail", "AppsScript", "Mensagens importadas: " + importados);
+
+  return {
+    ok: true,
+    etapa: "gmail",
+    importados: importados
+  };
 }
 
 function salvarAnexoGmail_(anexo, messageId, fila, memoria) {
-  const pasta = DriveApp.getFolderById(CONFIG.PASTA_ENTRADA_ID);
-  const arquivo = pasta.createFile(anexo.copyBlob());
+  var cfg = getConfigWMGJ_();
+  var pasta = DriveApp.getFolderById(cfg.PASTA_ENTRADA_ID);
+  var arquivo = pasta.createFile(anexo.copyBlob());
+
   fila.appendRow([new Date(), "GMAIL_ANEXO", arquivo.getId(), arquivo.getName(), arquivo.getMimeType(), "PENDENTE", "Origem messageId: " + messageId]);
   memoria.appendRow([new Date(), "GMAIL_ANEXO", arquivo.getId(), arquivo.getName(), "", "SALVO_DRIVE", messageId]);
 }
 
 function organizarPastasWMGJ() {
-  const raiz = DriveApp.getFolderById(CONFIG.PASTA_RAIZ_ID);
-  const nomes = ["00_GOVERNANCA", "01_ENTRADA_DOCUMENTOS", "02_FINANCEIRO", "03_PRODUTIVIDADE", "04_RELATORIOS", "05_GLOSAS", "06_CONTRATOS", "07_BACKUP"];
-  let criadas = 0;
-  nomes.forEach(nome => {
-    const existe = raiz.getFoldersByName(nome);
+  var cfg = getConfigWMGJ_();
+  var raiz = DriveApp.getFolderById(cfg.PASTA_RAIZ_ID);
+  var nomes = ["00_GOVERNANCA", "01_ENTRADA_DOCUMENTOS", "02_FINANCEIRO", "03_PRODUTIVIDADE", "04_RELATORIOS", "05_GLOSAS", "06_CONTRATOS", "07_BACKUP"];
+  var criadas = 0;
+
+  nomes.forEach(function(nome) {
+    var existe = raiz.getFoldersByName(nome);
     if (!existe.hasNext()) {
       raiz.createFolder(nome);
       criadas++;
     }
   });
-  registrarLog("DRIVE_ORGANIZADO", "Pastas criadas: " + criadas);
-  return { ok: true, etapa: "organizar", pastasCriadas: criadas };
+
+  registrarLogWMGJ_("OK", "organizar", "AppsScript", "Pastas criadas: " + criadas);
+
+  return {
+    ok: true,
+    etapa: "organizar",
+    pastasCriadas: criadas
+  };
 }
 
 function atualizarDashboardWMGJ() {
-  const ss = getPlanilha();
-  const fin = ss.getSheetByName(CONFIG.SHEETS.FINANCEIRO);
-  const dash = obterOuCriarAba_(ss, CONFIG.SHEETS.DASHBOARD, ["INDICADOR", "VALOR", "ATUALIZADO_EM"]);
-  const dados = fin ? fin.getDataRange().getValues() : [];
-  let receita = 0, recebido = 0, aberto = 0, despesa = 0, resultado = 0;
+  var cfg = getConfigWMGJ_();
+  var ss = getPlanilha();
+  var fin = ss.getSheetByName(cfg.SHEETS.FINANCEIRO);
+  var dash = obterOuCriarAba_(ss, cfg.SHEETS.DASHBOARD, ["INDICADOR", "VALOR", "ATUALIZADO_EM"]);
+  var dados = fin ? fin.getDataRange().getValues() : [];
+  var receita = 0;
+  var recebido = 0;
+  var aberto = 0;
+  var despesa = 0;
+  var resultado = 0;
+
   if (dados.length > 1) {
-    const h = dados[0];
-    const iReceita = h.indexOf("RECEITA_BRUTA");
-    const iRecebido = h.indexOf("RECEBIDO");
-    const iAberto = h.indexOf("EM_ABERTO");
-    const iDespesa = h.indexOf("DESPESA");
-    const iResultado = h.indexOf("RESULTADO");
-    dados.slice(1).forEach(l => {
-      receita += Number(l[iReceita]) || 0;
-      recebido += Number(l[iRecebido]) || 0;
-      aberto += Number(l[iAberto]) || 0;
-      despesa += Number(l[iDespesa]) || 0;
-      resultado += Number(l[iResultado]) || 0;
+    var h = dados[0];
+    var iReceita = h.indexOf("RECEITA_BRUTA");
+    var iRecebido = h.indexOf("RECEBIDO");
+    var iAberto = h.indexOf("EM_ABERTO");
+    var iDespesa = h.indexOf("DESPESA");
+    var iResultado = h.indexOf("RESULTADO");
+
+    dados.slice(1).forEach(function(l) {
+      receita += iReceita >= 0 ? Number(l[iReceita]) || 0 : 0;
+      recebido += iRecebido >= 0 ? Number(l[iRecebido]) || 0 : 0;
+      aberto += iAberto >= 0 ? Number(l[iAberto]) || 0 : 0;
+      despesa += iDespesa >= 0 ? Number(l[iDespesa]) || 0 : 0;
+      resultado += iResultado >= 0 ? Number(l[iResultado]) || 0 : 0;
     });
   }
+
   dash.clearContents();
   dash.appendRow(["INDICADOR", "VALOR", "ATUALIZADO_EM"]);
   dash.appendRow(["RECEITA_BRUTA", receita, new Date()]);
@@ -134,56 +296,92 @@ function atualizarDashboardWMGJ() {
   dash.appendRow(["EM_ABERTO", aberto, new Date()]);
   dash.appendRow(["DESPESA", despesa, new Date()]);
   dash.appendRow(["RESULTADO", resultado, new Date()]);
-  registrarLog("DASHBOARD_ATUALIZADO", "Dashboard recalculado");
-  return { ok: true, etapa: "dashboard", receita: receita, resultado: resultado };
-}
 
-function obterStatusWMGJ() {
-  const ss = getPlanilha();
-  const sheets = ss.getSheets().map(s => s.getName());
-  return { planilha: ss.getName(), abas: sheets.length, gmailImportar: CONFIG.GMAIL.IMPORTAR, gmailProcessado: CONFIG.GMAIL.PROCESSADO, atualizadoEm: new Date() };
-}
+  registrarLogWMGJ_("OK", "dashboard", "AppsScript", "Dashboard recalculado");
 
-function testarExecucaoWMGJ(payload) {
-  registrarLog("TESTE_OK", "Pipeline respondeu corretamente sem alterar base financeira");
-  return { ok: true, comando: payload.comando, status: "TESTE_OK", mensagem: "Webhook, Apps Script e Sheets responderam corretamente", escrita: CONFIG.SHEETS.LOG };
-}
-
-function registrarLog(evento, detalhe) {
-  const ss = getPlanilha();
-  const aba = obterOuCriarAba_(ss, CONFIG.SHEETS.LOG, ["DATA_HORA", "EVENTO", "DETALHE"]);
-  aba.appendRow([new Date(), evento, detalhe || ""]);
+  return {
+    ok: true,
+    etapa: "dashboard",
+    receita: receita,
+    resultado: resultado
+  };
 }
 
 function obterOuCriarAba_(ss, nome, cabecalho) {
-  let aba = ss.getSheetByName(nome);
-  if (!aba) aba = ss.insertSheet(nome);
-  if (aba.getLastRow() === 0 && cabecalho && cabecalho.length) aba.appendRow(cabecalho);
+  var aba = ss.getSheetByName(nome);
+
+  if (!aba) {
+    aba = ss.insertSheet(nome);
+  }
+
+  if (aba.getLastRow() === 0 && cabecalho && cabecalho.length) {
+    aba.appendRow(cabecalho);
+  }
+
   return aba;
 }
 
 function carregarIds_(aba, colunaIndexZeroBased) {
-  const dados = aba.getDataRange().getValues();
-  return new Set(dados.slice(1).map(l => l[colunaIndexZeroBased]).filter(Boolean));
+  var dados = aba.getDataRange().getValues();
+  return new Set(dados.slice(1).map(function(linha) {
+    return linha[colunaIndexZeroBased];
+  }).filter(Boolean));
 }
 
 function garantirLabelsGmail_() {
-  if (!GmailApp.getUserLabelByName(CONFIG.GMAIL.IMPORTAR)) GmailApp.createLabel(CONFIG.GMAIL.IMPORTAR);
-  if (!GmailApp.getUserLabelByName(CONFIG.GMAIL.PROCESSADO)) GmailApp.createLabel(CONFIG.GMAIL.PROCESSADO);
+  var cfg = getConfigWMGJ_();
+
+  if (!GmailApp.getUserLabelByName(cfg.GMAIL.IMPORTAR)) {
+    GmailApp.createLabel(cfg.GMAIL.IMPORTAR);
+  }
+
+  if (!GmailApp.getUserLabelByName(cfg.GMAIL.PROCESSADO)) {
+    GmailApp.createLabel(cfg.GMAIL.PROCESSADO);
+  }
 }
 
 function respostaJson_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function responderJsonWMGJ(obj) {
+  return respostaJson_(obj);
+}
+
+function testarWebhookInternoTesteExecucao() {
+  var evento = {
+    postData: {
+      contents: JSON.stringify({
+        comando: "teste_execucao",
+        origem: "AppsScript",
+        ambiente: "producao",
+        timestamp: new Date().toISOString()
+      })
+    }
+  };
+
+  var response = doPost(evento);
+  Logger.log(response.getContent());
+  return response.getContent();
 }
 
 function testarWebhookInterno() {
-  const url = "https://script.google.com/macros/s/AKfycbwqoyfMxLs4p_IRxEmt-Uo9OUF9q8LmJ84T4ydwGWx4yqrMOoxYy_3Q3NdtGPAQ-Ivc/exec";
-  const options = {
+  var cfg = getConfigWMGJ_();
+  var options = {
     method: "post",
     contentType: "application/json",
-    payload: JSON.stringify({ comando: "teste_execucao", origem: "AppsScript" }),
+    payload: JSON.stringify({
+      comando: "teste_execucao",
+      origem: "AppsScript",
+      ambiente: "producao",
+      timestamp: new Date().toISOString()
+    }),
     muteHttpExceptions: true
   };
-  const response = UrlFetchApp.fetch(url, options);
+
+  var response = UrlFetchApp.fetch(cfg.WEBAPP_URL, options);
   Logger.log(response.getContentText());
+  return response.getContentText();
 }
