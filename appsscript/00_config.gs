@@ -1,37 +1,12 @@
-const WMGJ_CONFIG = {
-  SPREADSHEET_ID: '15LgI2U2dtM7vnrxFsiQMPTvBapBDg5ftgGttx7Pw0Cw',
-  PASTA_RAIZ_ID: '1womnmIbaNQ8qkNlnkS2Ni71LVwtdrNj5',
-  PASTA_ENTRADA_ID: '1Gz0GtUfvKezI8OmAH0h8fkNLlqEzfYU-',
-  PASTA_EXTRATOS_ID: '1icw0pf8b3L1JWsn62LqtD20i7AI3sc3Y',
-  SHEETS: {
-    LOG: '10_LOG_AUTOMACAO',
-    EXTRATO_BRUTO: '01_EXTRATO_BRUTO',
-    EXTRATO_CLASSIFICADO: '02_EXTRATO_CLASSIFICADO',
-    RESULTADO: '03_RESULTADO_FINANCEIRO',
-    DASHBOARD: '05_DASHBOARD',
-    REGRAS: '06_REGRAS_CLASSIFICACAO',
-    PRODUCAO: '08_PRODUCAO_MEDICA',
-    NFS: '09_NFS_REPASSES',
-    CONCILIACAO: '10_CONCILIACAO_COMPLETA',
-    PENDENCIAS: '11_PENDENCIAS_CONCILIACAO',
-    MEMORIA: '14_MEMORIA_BASE_DOCUMENTOS',
-    FILA: '15_FILA_PROCESSAMENTO'
-  },
-  GMAIL: {
-    LABEL_IMPORTAR: 'WMGJ_IMPORTAR',
-    LABEL_PROCESSADO: 'WMGJ_PROCESSADO'
-  },
-  AI: {
-    GEMINI_KEY_PROPERTY: 'GEMINI_API_KEY'
-  }
-};
-
-function getPlanilha() {
-  return SpreadsheetApp.openById(WMGJ_CONFIG.SPREADSHEET_ID);
-}
-
-function responderJsonWMGJ(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+/**
+ * DEPRECATED — configuração legada neutralizada.
+ *
+ * Motivo:
+ * - Este arquivo declarava WMGJ_CONFIG em escopo global.
+ * - A configuração oficial agora fica exclusivamente em src/00_CORE_WMGJ.gs,
+ *   por meio de getConfigWMGJ_().
+ *
+ * Regra operacional:
+ * - Não declarar const SPREADSHEET_ID, CONFIG ou WMGJ_CONFIG em escopo global.
+ * - Usar getConfigWMGJ_() e getPlanilha() do núcleo oficial.
+ */
