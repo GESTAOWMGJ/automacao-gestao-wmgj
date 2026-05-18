@@ -113,7 +113,7 @@ Interpretação: após processar o item pendente, a segunda execução não enco
 
 ## Diagnóstico Gemini/OCR
 
-Data: 18/05/2026 às 11:12
+### 18/05/2026 às 11:12
 
 Resultado informado pelo Apps Script:
 
@@ -133,7 +133,27 @@ Drive API avançado / OCR real: PENDENTE
 driveApiAvancadoDisponivel: false
 ```
 
-Conclusão: Gemini está configurado e a pasta de entrada está acessível. O gargalo atual é habilitar o serviço avançado Drive API no Apps Script e ativar Google Drive API no projeto Google Cloud vinculado.
+### 18/05/2026 às 11:20
+
+Resultado informado pelo Apps Script:
+
+```text
+Pasta de entrada: OK
+99_ARQUIVO_BRUTO_A_CLASSIFICAR
+ID: 1Gz0GtUfvKezI8OmAH0h8fkNLlqEzfYU-
+
+Gemini: OK
+configurado: true
+modelo: gemini-1.5-flash
+
+Extração documental: OK
+versao: v1.1.0-extracao-documental
+
+Drive API avançado / OCR real: OK
+driveApiAvancadoDisponivel: true
+```
+
+Conclusão: Gemini está configurado, pasta de entrada está acessível, camada de extração documental está carregada e OCR real via Drive API avançada está habilitado.
 
 ## Gargalo resolvido
 
@@ -170,7 +190,7 @@ Reexecução segura OK
 Pipeline V3 estável
 Gemini configurado OK
 Camada de extração documental carregada OK
-OCR real pendente: Drive API avançado indisponível
+OCR real habilitado OK
 ```
 
 ## Próxima etapa técnica
@@ -178,20 +198,20 @@ OCR real pendente: Drive API avançado indisponível
 Próximo bloco de evolução:
 
 ```text
-Habilitar OCR real via Drive API avançada e testar PDF/imagem real.
+Testar PDF/imagem real com OCR, Gemini e gravação validada na memória-base.
 ```
 
 A ordem correta é:
 
 ```text
 1. Manter V3 intocada como base confiável.
-2. Habilitar Drive API nos Serviços avançados do Apps Script.
-3. Ativar Google Drive API no projeto Google Cloud vinculado.
-4. Reexecutar diagnosticarExtracaoRealWMGJ_V1.
-5. Confirmar driveApiAvancadoDisponivel: true.
-6. Testar PDF/imagem na pasta 99_ARQUIVO_BRUTO_A_CLASSIFICAR.
-7. Rodar executarExtracaoRealWMGJ_V1(5).
-8. Validar abas 16_EXTRACOES_DOCUMENTAIS e 14_MEMORIA_BASE_DOCUMENTOS.
+2. Colocar 1 PDF ou imagem real em 99_ARQUIVO_BRUTO_A_CLASSIFICAR.
+3. Rodar executarExtracaoRealWMGJ_V1(5).
+4. Validar aba 16_EXTRACOES_DOCUMENTAIS.
+5. Confirmar METODO_EXTRACAO = drive_api_ocr_convert ou método equivalente.
+6. Validar aba 14_MEMORIA_BASE_DOCUMENTOS.
+7. Confirmar status PROCESSADO ou REVISAR_HUMANO com motivo claro.
+8. Confirmar log completo em 10_LOG_AUTOMACAO.
 ```
 
 ## Regra de arquitetura
