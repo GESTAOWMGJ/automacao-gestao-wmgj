@@ -1,23 +1,17 @@
 /**
  * WMGJ — Camada de extração documental real
- * Versão: v1.1.0-extracao-documental
+ * Versão: v1.1.1-extracao-documental-compat
  *
  * Esta camada NÃO substitui a V3 estável.
  * Ela processa a mesma fila com extração real de conteúdo e grava na mesma memória-base
- * somente depois de classificação e validação JSON. Porque jogar OCR direto no motor
- * estável seria exatamente o tipo de sabotagem que software corporativo adora.
+ * somente depois de classificação e validação JSON.
  *
- * Depende de:
- * - src/00_CORE_WMGJ.gs
- * - src/01_PIPELINE_CONFIABILIDADE_WMGJ.gs
- * - src/05_GEMINI_CLASSIFICADOR_WMGJ.gs
- *
- * Para OCR/conversão de PDF/imagem/Office:
- * - habilitar Serviço avançado do Google: Drive API
- * - habilitar Drive API no Google Cloud do projeto Apps Script
+ * Ajuste v1.1.1:
+ * - remove dependência direta de garantirAbasControlePipelineWMGJ_V3_()
+ * - usa helper próprio de compatibilidade para evitar erro em Apps Script com 01 incompleto
  */
 
-var WMGJ_EXTRACAO_VERSAO = "v1.1.0-extracao-documental";
+var WMGJ_EXTRACAO_VERSAO = "v1.1.1-extracao-documental-compat";
 
 function executarExtracaoRealWMGJ(limite) {
   return executarExtracaoRealWMGJ_V1(limite || 20);
@@ -40,7 +34,7 @@ function executarExtracaoRealWMGJ_V1(limite) {
 }
 
 function processarFilaComExtracaoRealWMGJ_V1(limite) {
-  garantirAbasControlePipelineWMGJ_V3_();
+  garantirAbasControleExtracaoWMGJ_V1_();
   garantirAbaExtracoesDocumentaisWMGJ_V1_();
 
   var cfg = getConfigWMGJ_();
@@ -381,4 +375,62 @@ function diagnosticarExtracaoRealWMGJ_V1() {
   }));
 
   return resultado;
+}
+
+function garantirAbasControleExtracaoWMGJ_V1_() {
+  var cfg = getConfigWMGJ_();
+  var ss = getPlanilha();
+
+  obterOuCriarAba_(ss, "13_CONTROLE_PIPELINE", [
+    "ETAPA",
+    "COMPONENTE",
+    "STATUS_ATUAL",
+    "EVIDENCIA",
+    "RISCO",
+    "ACAO_CORRETIVA",
+    "RESPONSAVEL",
+    "SLA",
+    "BLOQUEIA_PRODUCAO",
+    "ULTIMA_VALIDACAO",
+    "OBS"
+  ]);
+
+  obterOuCriarAba_(ss, cfg.SHEETS.MEMORIA, cabecalhoMemoriaExtracaoWMGJ_V1_());
+  obterOuCriarAba_(ss, cfg.SHEETS.FILA, cabecalhoFilaExtracaoWMGJ_V1_());
+
+  return {
+    ok: true,
+    versao: WMGJ_EXTRACAO_VERSAO,
+    mensagem: "Abas de controle da extração garantidas sem depender de helper privado V3"
+  };
+}
+
+function cabecalhoFilaExtracaoWMGJ_V1_() {
+  return [
+    "DATA_ENTRADA",
+    "ORIGEM",
+    "ID_ORIGEM",
+    "NOME_ARQUIVO",
+    "MIME_TYPE",
+    "STATUS",
+    "TENTATIVAS",
+    "PROXIMA_ACAO",
+    "ULTIMO_ERRO",
+    "OBSERVACAO"
+  ];
+}
+
+function cabecalhoMemoriaExtracaoWMGJ_V1_() {
+  return [
+    "DATA_PROCESSAMENTO",
+    "ORIGEM",
+    "ID_ORIGEM",
+    "NOME_ARQUIVO",
+    "MIME_TYPE",
+    "HASH",
+    "COMPETENCIA",
+    "CATEGORIA",
+    "STATUS",
+    "RESUMO"
+  ];
 }
