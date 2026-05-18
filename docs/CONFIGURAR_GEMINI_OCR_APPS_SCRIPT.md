@@ -50,8 +50,10 @@ No Apps Script:
 1. Abra o projeto.
 2. Clique em Serviços.
 3. Adicione `Drive API`.
-4. Confirme a versão disponível.
+4. Se houver escolha de versão, use `v2` para esta implementação.
 5. Salve.
+
+Motivo: a função atual usa `Drive.Files.copy(..., {ocr: true, ocrLanguage: 'pt'})`, que é o padrão compatível com OCR/conversão da Drive API v2.
 
 No Google Cloud do projeto:
 
