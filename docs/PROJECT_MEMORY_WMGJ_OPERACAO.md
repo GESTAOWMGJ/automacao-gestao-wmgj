@@ -111,6 +111,30 @@ processarFilaWMGJ_V3
 
 Interpretação: após processar o item pendente, a segunda execução não encontrou novas pendências e não gerou erro ou duplicidade. Esse é o comportamento correto.
 
+## Diagnóstico Gemini/OCR
+
+Data: 18/05/2026 às 11:12
+
+Resultado informado pelo Apps Script:
+
+```text
+Pasta de entrada: OK
+99_ARQUIVO_BRUTO_A_CLASSIFICAR
+ID: 1Gz0GtUfvKezI8OmAH0h8fkNLlqEzfYU-
+
+Gemini: OK
+configurado: true
+modelo: gemini-1.5-flash
+
+Extração documental: camada carregada
+versao: v1.1.0-extracao-documental
+
+Drive API avançado / OCR real: PENDENTE
+driveApiAvancadoDisponivel: false
+```
+
+Conclusão: Gemini está configurado e a pasta de entrada está acessível. O gargalo atual é habilitar o serviço avançado Drive API no Apps Script e ativar Google Drive API no projeto Google Cloud vinculado.
+
 ## Gargalo resolvido
 
 Problema anterior:
@@ -144,6 +168,9 @@ Log OK
 Deduplicação OK
 Reexecução segura OK
 Pipeline V3 estável
+Gemini configurado OK
+Camada de extração documental carregada OK
+OCR real pendente: Drive API avançado indisponível
 ```
 
 ## Próxima etapa técnica
@@ -151,19 +178,20 @@ Pipeline V3 estável
 Próximo bloco de evolução:
 
 ```text
-Ligar extração real de conteúdo com Gemini/OCR mantendo a V3 como base estável.
+Habilitar OCR real via Drive API avançada e testar PDF/imagem real.
 ```
 
 A ordem correta é:
 
 ```text
 1. Manter V3 intocada como base confiável.
-2. Criar camada separada de extração documental.
-3. Integrar Gemini para classificação estruturada.
-4. Integrar OCR/conversão para PDFs e imagens.
-5. Gravar JSON validado na memória-base.
-6. Gerar relatórios financeiros e operacionais a partir da memória-base.
-7. Atualizar painel executivo e relatórios mensais.
+2. Habilitar Drive API nos Serviços avançados do Apps Script.
+3. Ativar Google Drive API no projeto Google Cloud vinculado.
+4. Reexecutar diagnosticarExtracaoRealWMGJ_V1.
+5. Confirmar driveApiAvancadoDisponivel: true.
+6. Testar PDF/imagem na pasta 99_ARQUIVO_BRUTO_A_CLASSIFICAR.
+7. Rodar executarExtracaoRealWMGJ_V1(5).
+8. Validar abas 16_EXTRACOES_DOCUMENTAIS e 14_MEMORIA_BASE_DOCUMENTOS.
 ```
 
 ## Regra de arquitetura
@@ -179,8 +207,6 @@ Arquivo bruto -> Fila -> Extração -> Classificação -> Validação JSON -> Me
 ## Próximos arquivos sugeridos
 
 ```text
-src/04_EXTRACAO_DOCUMENTAL_WMGJ.gs
-src/05_GEMINI_CLASSIFICADOR_WMGJ.gs
 src/06_OCR_DOCUMENTOS_WMGJ.gs
 schemas/documento_extraido.schema.json
 schemas/classificacao_documental.schema.json
