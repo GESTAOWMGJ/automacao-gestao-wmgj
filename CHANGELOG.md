@@ -50,6 +50,29 @@ Resultado:
 0 duplicidades
 ```
 
+### Revalidação operacional
+
+Revalidação registrada em 18/05/2026 às 10:44:
+
+```text
+processarFilaWMGJ_V3
+{"ok":true,"processados":1,"erros":0,"duplicados":0}
+
+testePipelineArquivosReaisWMGJ_V3
+Drive -> Fila -> Processamento -> Memória-base -> Log
+lidos: 1
+enfileirados: 1
+duplicados no preparo: 0
+processados: 1
+erros: 0
+duplicados no processamento: 0
+
+processarFilaWMGJ_V3 em segunda execução
+{"ok":true,"processados":0,"erros":0,"duplicados":0}
+```
+
+Conclusão: pipeline V3 confirmado como estável. A segunda execução sem itens pendentes retornou zero processamento e zero erro, comportamento esperado para fila limpa.
+
 ### Próxima fase
 
 - Integrar Gemini/OCR em produção controlada.
