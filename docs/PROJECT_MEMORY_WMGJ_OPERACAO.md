@@ -26,12 +26,36 @@ Arquivo principal:
 src/01_PIPELINE_CONFIABILIDADE_WMGJ.gs
 ```
 
+## Camada de extração real validada
+
+```text
+v1.1.2-extracao-documental-compat-total
+```
+
+Arquivo principal:
+
+```text
+src/04_EXTRACAO_DOCUMENTAL_WMGJ.gs
+```
+
+Objetivo da camada:
+
+```text
+Manter V3 estável intocada e adicionar extração real com Gemini/OCR, com compatibilidade contra helpers privados ausentes no Apps Script.
+```
+
 ## Pipeline validado
 
 Fluxo operacional confirmado:
 
 ```text
 Drive -> Fila -> Processamento -> Memória-base -> Log
+```
+
+Fluxo expandido da extração real:
+
+```text
+Drive -> Fila -> Extração/OCR -> Gemini/Fallback -> Validação JSON -> Memória-base -> Log
 ```
 
 Pasta de entrada validada:
@@ -41,6 +65,13 @@ Pasta de entrada validada:
 ID: 1Gz0GtUfvKezI8OmAH0h8fkNLlqEzfYU-
 ```
 
+Planilha mestre localizada no Drive:
+
+```text
+WMGJ_BASE_MESTRE_OPERACIONAL_FINANCEIRA
+ID: 15LgI2U2dtM7vnrxFsiQMPTvBapBDg5ftgGttx7Pw0Cw
+```
+
 Abas centrais:
 
 ```text
@@ -48,6 +79,7 @@ Abas centrais:
 13_CONTROLE_PIPELINE
 14_MEMORIA_BASE_DOCUMENTOS
 15_FILA_PROCESSAMENTO
+16_EXTRACOES_DOCUMENTAIS
 ```
 
 ## Funções oficiais V3
@@ -63,9 +95,19 @@ processarFilaWMGJ_V3
 
 As funções antigas sem `_V3` foram mantidas como wrappers para preservar compatibilidade com gatilhos antigos, mas a lógica operacional real está na V3.
 
+## Funções da extração real
+
+```text
+rodarDiagnosticoExtracaoRealWMGJ
+rodarExtracaoRealWMGJ_5
+executarExtracaoRealWMGJ_V1
+processarFilaComExtracaoRealWMGJ_V1
+diagnosticarExtracaoRealWMGJ_V1
+```
+
 ## Validação operacional
 
-### Primeira validação
+### Primeira validação V3
 
 Data: 18/05/2026 às 09:50
 
@@ -79,7 +121,7 @@ Resultado:
 0 duplicidades
 ```
 
-### Revalidação
+### Revalidação V3
 
 Data: 18/05/2026 às 10:44
 
@@ -155,6 +197,71 @@ driveApiAvancadoDisponivel: true
 
 Conclusão: Gemini está configurado, pasta de entrada está acessível, camada de extração documental está carregada e OCR real via Drive API avançada está habilitado.
 
+## Validação da extração real
+
+### 18/05/2026 às 11:42
+
+Resultado informado pelo Apps Script:
+
+```text
+processarFilaComExtracaoRealWMGJ_V1
+{"ok":true,"versao":"v1.1.2-extracao-documental-compat-total","etapa":"processarFilaComExtracaoRealWMGJ_V1","avaliados":1,"processados":1,"erros":0,"duplicados":0,"revisar":0}
+```
+
+Execução consolidada:
+
+```text
+executarExtracaoRealWMGJ_V1
+preparo:
+lidos: 2
+enfileirados: 0
+duplicados: 2
+
+processamento:
+avaliados: 1
+processados: 1
+erros: 0
+duplicados: 0
+revisar: 0
+```
+
+Interpretação:
+
+```text
+A extração real rodou sem erro fatal.
+A fila processou 1 item pendente.
+Não houve erro, duplicidade falsa nem revisão humana.
+Os 2 arquivos da pasta de entrada já estavam reconhecidos no preparo, por isso não foram reenfileirados.
+```
+
+### 18/05/2026 às 11:45
+
+Resultado informado pelo Apps Script / Cloud Logs:
+
+```text
+executarExtracaoRealWMGJ_V1
+preparo:
+lidos: 2
+enfileirados: 0
+duplicados: 2
+
+processamento:
+avaliados: 0
+processados: 0
+erros: 0
+duplicados: 0
+revisar: 0
+```
+
+Interpretação:
+
+```text
+Reexecução idempotente validada.
+A pasta tinha 2 arquivos já reconhecidos.
+Não havia item PENDENTE ou ERRO_REPROCESSAR na fila.
+A execução não criou duplicidade, não gerou erro e não reprocessou indevidamente.
+```
+
 ## Gargalo resolvido
 
 Problema anterior:
@@ -177,6 +284,26 @@ PENDENTE fica apenas em 15_FILA_PROCESSAMENTO.
 Deduplicação usa ID_ORIGEM + HASH somente contra memória processada.
 ```
 
+## Segundo gargalo resolvido
+
+Problema anterior:
+
+```text
+ReferenceError por helpers privados ausentes no Apps Script.
+```
+
+Exemplo:
+
+```text
+garantirAbasControlePipelineWMGJ_V3_ is not defined
+```
+
+Correção:
+
+```text
+src/04_EXTRACAO_DOCUMENTAL_WMGJ.gs foi atualizado para v1.1.2-extracao-documental-compat-total, com helpers locais de compatibilidade.
+```
+
 ## Status técnico atual
 
 ```text
@@ -187,10 +314,17 @@ Memória-base OK
 Log OK
 Deduplicação OK
 Reexecução segura OK
+Idempotência OK
 Pipeline V3 estável
 Gemini configurado OK
-Camada de extração documental carregada OK
+Drive API avançada OK
 OCR real habilitado OK
+Extração real v1.1.2 executada OK
+Processamento real de 1 item OK
+Reexecução sem pendência OK
+Erros: 0
+Duplicados no processamento: 0
+Revisão humana: 0
 ```
 
 ## Próxima etapa técnica
@@ -198,20 +332,19 @@ OCR real habilitado OK
 Próximo bloco de evolução:
 
 ```text
-Testar PDF/imagem real com OCR, Gemini e gravação validada na memória-base.
+Auditar conteúdo gravado nas abas 16_EXTRACOES_DOCUMENTAIS e 14_MEMORIA_BASE_DOCUMENTOS, depois gerar relatório executivo mensal automático.
 ```
 
 A ordem correta é:
 
 ```text
-1. Manter V3 intocada como base confiável.
-2. Colocar 1 PDF ou imagem real em 99_ARQUIVO_BRUTO_A_CLASSIFICAR.
-3. Rodar executarExtracaoRealWMGJ_V1(5).
-4. Validar aba 16_EXTRACOES_DOCUMENTAIS.
-5. Confirmar METODO_EXTRACAO = drive_api_ocr_convert ou método equivalente.
-6. Validar aba 14_MEMORIA_BASE_DOCUMENTOS.
-7. Confirmar status PROCESSADO ou REVISAR_HUMANO com motivo claro.
-8. Confirmar log completo em 10_LOG_AUTOMACAO.
+1. Conferir 16_EXTRACOES_DOCUMENTAIS.
+2. Confirmar METODO_EXTRACAO, TAMANHO_TEXTO, STATUS e AMOSTRA_TEXTO.
+3. Conferir 14_MEMORIA_BASE_DOCUMENTOS.
+4. Confirmar competência, categoria, status PROCESSADO e resumo JSON.
+5. Consolidar dados financeiros, atendimentos, contas a receber e status executivo.
+6. Gerar PDF didático para sócios.
+7. Só depois versionar como nova release estável.
 ```
 
 ## Regra de arquitetura
@@ -227,7 +360,7 @@ Arquivo bruto -> Fila -> Extração -> Classificação -> Validação JSON -> Me
 ## Próximos arquivos sugeridos
 
 ```text
-src/06_OCR_DOCUMENTOS_WMGJ.gs
+src/06_RELATORIO_EXECUTIVO_WMGJ.gs
 schemas/documento_extraido.schema.json
 schemas/classificacao_documental.schema.json
 tests/payloads/documento_texto_teste.json
@@ -246,6 +379,7 @@ JSON validado com categoria, competência, valor e resumo
 0 falhas derrubando lote inteiro
 0 duplicidades falsas
 log completo em 10_LOG_AUTOMACAO
+relatório executivo gerado a partir da memória-base
 ```
 
 ## Observação operacional
