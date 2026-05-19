@@ -25,21 +25,14 @@ function rel(file) {
   return path.relative(root, file).replace(/\\/g, '/');
 }
 
-if (!fs.existsSync(srcDir)) {
-  errors.push('Diretorio src/ nao encontrado. O deploy oficial depende de src/*.gs.');
-}
+if (!fs.existsSync(srcDir)) errors.push('Diretorio src/ nao encontrado.');
 
 const srcGsFiles = listFiles(srcDir, file => file.endsWith('.gs')).sort();
-if (!srcGsFiles.length) {
-  errors.push('Nenhum arquivo .gs encontrado em src/. Nada sera publicado no Apps Script.');
-}
+if (!srcGsFiles.length) errors.push('Nenhum arquivo .gs encontrado em src/.');
 
 const allGsFiles = listFiles(root, file => file.endsWith('.gs')).sort();
 const nonSrcGsFiles = allGsFiles.filter(file => !rel(file).startsWith('src/'));
-
-if (nonSrcGsFiles.length) {
-  warnings.push('Arquivos .gs fora de src/ sao legado/nao publicados: ' + nonSrcGsFiles.map(rel).join(', '));
-}
+if (nonSrcGsFiles.length) warnings.push('Arquivos .gs fora de src/ sao legado/nao publicados: ' + nonSrcGsFiles.map(rel).join(', '));
 
 const functionOwners = new Map();
 const globalVarOwners = new Map();
@@ -48,9 +41,9 @@ const spreadsheetIdOccurrences = [];
 for (const file of srcGsFiles) {
   const text = fs.readFileSync(file, 'utf8');
   const fileRel = rel(file);
+  let match;
 
   const functionRegex = /^\s*function\s+([A-Za-z_$][\w$]*)\s*\(/gm;
-  let match;
   while ((match = functionRegex.exec(text)) !== null) {
     const name = match[1];
     if (!functionOwners.has(name)) functionOwners.set(name, []);
@@ -65,23 +58,17 @@ for (const file of srcGsFiles) {
   }
 
   const literalRegex = /15LgI2U2dtM7vnrxFsiQMPTvBapBDg5ftgGttx7Pw0Cw/g;
-  while ((match = literalRegex.exec(text)) !== null) {
-    spreadsheetIdOccurrences.push(fileRel);
-  }
+  while ((match = literalRegex.exec(text)) !== null) spreadsheetIdOccurrences.push(fileRel);
 }
 
 for (const [name, owners] of functionOwners.entries()) {
   const uniqueOwners = Array.from(new Set(owners));
-  if (uniqueOwners.length > 1) {
-    errors.push('Funcao duplicada em src/: ' + name + ' aparece em ' + uniqueOwners.join(', '));
-  }
+  if (uniqueOwners.length > 1) errors.push('Funcao duplicada em src/: ' + name + ' aparece em ' + uniqueOwners.join(', '));
 }
 
 for (const [name, owners] of globalVarOwners.entries()) {
   const uniqueOwners = Array.from(new Set(owners));
-  if (uniqueOwners.length > 1) {
-    errors.push('Variavel global duplicada em src/: ' + name + ' aparece em ' + uniqueOwners.join(', '));
-  }
+  if (uniqueOwners.length > 1) errors.push('Variavel global duplicada em src/: ' + name + ' aparece em ' + uniqueOwners.join(', '));
 }
 
 const uniqueSpreadsheetOwners = Array.from(new Set(spreadsheetIdOccurrences));
@@ -91,30 +78,18 @@ if (uniqueSpreadsheetOwners.length > 1) {
 
 if (fs.existsSync(workflowPath)) {
   const workflow = fs.readFileSync(workflowPath, 'utf8');
-  if (!workflow.includes('cp src/*.gs build-appscript/')) {
-    errors.push('Workflow nao esta restrito a cp src/*.gs build-appscript/. Risco de publicar legado por acidente.');
+  const commandLines = workflow.split(/\r?\n/).map(line => line.trim()).filter(line => line.startsWith('cp '));
+  if (!commandLines.includes('cp src/*.gs build-appscript/')) errors.push('Workflow nao copia src/*.gs para build-appscript/.');
+  if (commandLines.some(line => line.includes('apps-script') || line.includes('appsscript/'))) {
+    errors.push('Workflow tenta copiar apps-script/appsscript. Essas pastas sao legado.');
   }
-  if (workflow.includes('cp apps-script') || workflow.includes('cp appsscript')) {
-    errors.push('Workflow menciona apps-script/appsscript. Essas pastas sao legado e nao devem ser publicadas.');
-  }
-  if (!workflow.includes('node tools/audit-appscript.js')) {
-    errors.push('Workflow nao executa tools/audit-appscript.js antes do deploy.');
-  }
+  if (!workflow.includes('node tools/audit-appscript.js')) errors.push('Workflow nao executa tools/audit-appscript.js antes do deploy.');
 }
 
 console.log('AUDITORIA_APPSCRIPT_WMGJ');
-console.log(JSON.stringify({
-  ok: errors.length === 0,
-  srcFiles: srcGsFiles.map(rel),
-  legacyGsFiles: nonSrcGsFiles.map(rel),
-  warnings,
-  errors
-}, null, 2));
+console.log(JSON.stringify({ ok: errors.length === 0, srcFiles: srcGsFiles.map(rel), legacyGsFiles: nonSrcGsFiles.map(rel), warnings, errors }, null, 2));
 
-if (warnings.length) {
-  console.warn('WARNINGS:\n' + warnings.map(w => '- ' + w).join('\n'));
-}
-
+if (warnings.length) console.warn('WARNINGS:\n' + warnings.map(w => '- ' + w).join('\n'));
 if (errors.length) {
   console.error('ERROS:\n' + errors.map(e => '- ' + e).join('\n'));
   process.exit(1);
