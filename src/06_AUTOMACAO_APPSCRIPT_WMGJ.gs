@@ -11,7 +11,8 @@
  * prepararPipelineConfiavelWMGJ_V3 -> processarFilaWMGJ_V3
  */
 
-var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.3-auditoria-organizacao-appscript';
+var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.4-status-automacao-planilha-mestre';
+var WMGJ_PLANILHA_MESTRE_ID = '15LgI2U2dtM7vnrxFsiQMPTvBapBDg5ftgGttx7Pw0Cw';
 
 var WMGJ_FUNCAO_AUTOMACAO_PRINCIPAL = 'executarAutomacaoOperacionalWMGJ';
 
@@ -22,10 +23,6 @@ var WMGJ_GATILHOS_OPERACIONAIS_OBSOLETOS = {
   jobRelatorioMensalWMGJ: true
 };
 
-/**
- * Executa a automação operacional padrão.
- * Pode ser chamada manualmente ou por gatilho temporal.
- */
 function executarAutomacaoOperacionalWMGJ() {
   var inicio = new Date();
 
@@ -73,10 +70,6 @@ function executarAutomacaoOperacionalWMGJ() {
   }
 }
 
-/**
- * Instala o gatilho temporal oficial.
- * Remove gatilhos duplicados e gatilhos legados do pipeline antes de criar o atual.
- */
 function instalarGatilhoAutomacaoWMGJ() {
   var auditoriaAntes = auditarOrganizarAppsScriptWMGJ({ modo: 'PRE_INSTALACAO' });
   var removidos = removerGatilhosAutomacaoWMGJ_({ removerLegados: true, removerPrincipal: true });
@@ -102,9 +95,6 @@ function instalarGatilhoAutomacaoWMGJ() {
   return resultado;
 }
 
-/**
- * Remove gatilhos da automação operacional WMGJ.
- */
 function removerGatilhosAutomacaoWMGJ() {
   var removidos = removerGatilhosAutomacaoWMGJ_({ removerLegados: true, removerPrincipal: true });
 
@@ -122,16 +112,11 @@ function removerGatilhosAutomacaoWMGJ() {
   return resultado;
 }
 
-/**
- * Auditoria organizacional do Apps Script.
- * Remove duplicidades operacionais conhecidas e preserva gatilhos externos opcionais.
- */
 function auditarOrganizarAppsScriptWMGJ(opcoes) {
   opcoes = opcoes || {};
 
   var triggersAntes = listarTodosGatilhosAppsScriptWMGJ_();
   var problemas = [];
-  var removidos = [];
   var contagem = {};
 
   triggersAntes.forEach(function(t) {
@@ -150,7 +135,7 @@ function auditarOrganizarAppsScriptWMGJ(opcoes) {
     }
   });
 
-  removidos = removerGatilhosAutomacaoWMGJ_({ removerLegados: true, removerPrincipalDuplicado: true });
+  var removidos = removerGatilhosAutomacaoWMGJ_({ removerLegados: true, removerPrincipalDuplicado: true });
 
   var resultado = {
     ok: true,
@@ -172,9 +157,6 @@ function auditarOrganizarAppsScriptWMGJ(opcoes) {
   return resultado;
 }
 
-/**
- * Execução de diagnóstico rápido da automação.
- */
 function diagnosticarAutomacaoAppsScriptWMGJ() {
   var triggers = listarTodosGatilhosAppsScriptWMGJ_();
   var gatilhosAutomacao = triggers.filter(function(t) {
@@ -190,6 +172,19 @@ function diagnosticarAutomacaoAppsScriptWMGJ() {
     totalGatilhosAutomacao: gatilhosAutomacao.length,
     todosGatilhos: triggers,
     diagnosticadoEm: new Date().toISOString()
+  };
+
+  registrarStatusAutomacaoWMGJ_(resultado);
+  return resultado;
+}
+
+function testarRegistroStatusAutomacaoWMGJ() {
+  var resultado = {
+    ok: true,
+    versao: WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
+    etapa: 'testarRegistroStatusAutomacaoWMGJ',
+    mensagem: 'Registro de status validado automaticamente',
+    testadoEm: new Date().toISOString()
   };
 
   registrarStatusAutomacaoWMGJ_(resultado);
@@ -257,31 +252,19 @@ function registrarLogAutomacaoWMGJ_(status, comando, payload) {
   }
 }
 
-/**
- * Registra status em aba própria, quando a planilha base estiver disponível.
- */
 function registrarStatusAutomacaoWMGJ_(payload) {
   try {
-    if (typeof getPlanilha !== 'function' || typeof obterOuCriarAba_ !== 'function') {
-      Logger.log(JSON.stringify(payload));
-      return;
-    }
-
-    var ss = getPlanilha();
-    var aba = obterOuCriarAba_(ss, '15_STATUS_AUTOMACAO', [
-      'DATA_REGISTRO',
-      'VERSAO',
-      'ETAPA',
-      'OK',
-      'RESUMO_JSON'
-    ]);
+    var ss = obterPlanilhaStatusAutomacaoWMGJ_();
+    var aba = obterOuCriarAbaStatusAutomacaoWMGJ_(ss);
 
     aba.appendRow([
       new Date(),
-      payload.versao || '',
+      payload.versao || WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
       payload.etapa || '',
       payload.ok === true,
-      JSON.stringify(payload)
+      JSON.stringify(payload),
+      'AppsScript',
+      payload.erro || payload.mensagem || ''
     ]);
 
   } catch (erro) {
@@ -291,4 +274,59 @@ function registrarStatusAutomacaoWMGJ_(payload) {
       payload: payload
     }));
   }
+}
+
+function obterPlanilhaStatusAutomacaoWMGJ_() {
+  if (typeof getPlanilha === 'function') {
+    try {
+      var ss1 = getPlanilha();
+      if (ss1) return ss1;
+    } catch (erroGetPlanilha) {}
+  }
+
+  if (typeof getPlanilhaWMGJ_Compat_ === 'function') {
+    try {
+      var ss2 = getPlanilhaWMGJ_Compat_();
+      if (ss2) return ss2;
+    } catch (erroCompat) {}
+  }
+
+  if (typeof getPlanilhaWMGJ_Automacao_ === 'function') {
+    try {
+      var ss3 = getPlanilhaWMGJ_Automacao_();
+      if (ss3) return ss3;
+    } catch (erroAuto) {}
+  }
+
+  var idProp = PropertiesService.getScriptProperties().getProperty('WMGJ_SPREADSHEET_ID');
+  if (idProp) {
+    return SpreadsheetApp.openById(idProp);
+  }
+
+  return SpreadsheetApp.openById(WMGJ_PLANILHA_MESTRE_ID);
+}
+
+function obterOuCriarAbaStatusAutomacaoWMGJ_(ss) {
+  var nome = '15_STATUS_AUTOMACAO';
+  var cabecalho = [
+    'DATA_REGISTRO',
+    'VERSAO',
+    'ETAPA',
+    'OK',
+    'RESUMO_JSON',
+    'ORIGEM',
+    'OBSERVACAO'
+  ];
+
+  var aba = ss.getSheetByName(nome);
+  if (!aba) {
+    aba = ss.insertSheet(nome);
+  }
+
+  if (aba.getLastRow() === 0) {
+    aba.getRange(1, 1, 1, cabecalho.length).setValues([cabecalho]);
+    aba.setFrozenRows(1);
+  }
+
+  return aba;
 }
