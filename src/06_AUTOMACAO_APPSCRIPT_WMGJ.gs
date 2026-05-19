@@ -3,7 +3,7 @@
  * Fonte única de planilha: getConfigWMGJ_().SPREADSHEET_ID em 00_CORE_WMGJ.gs.
  */
 
-var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.7-fonte-unica-planilha';
+var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.8-prova-cruzada-status';
 var WMGJ_FUNCAO_AUTOMACAO_PRINCIPAL = 'executarAutomacaoOperacionalWMGJ';
 
 var WMGJ_GATILHOS_OPERACIONAIS_OBSOLETOS = {
@@ -147,6 +147,7 @@ function diagnosticarAutomacaoAppsScriptWMGJ() {
   };
 
   registrarStatusAutomacaoWMGJ_(resultado);
+  registrarLogAutomacaoWMGJ_('OK', 'diagnosticarAutomacaoAppsScriptWMGJ', resultado);
   return resultado;
 }
 
@@ -165,15 +166,18 @@ function validarRegistroStatusAutomacaoWMGJ() {
     throw new Error('VALIDACAO_STATUS_FALHOU: planilha divergente. Atual=' + ss.getId() + ' Esperada=' + esperado);
   }
 
-  registrarStatusAutomacaoWMGJ_({
+  var payloadStatus = {
     ok: true,
     versao: WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
     etapa: 'validarRegistroStatusAutomacaoWMGJ',
     idTeste: idTeste,
     spreadsheetId: ss.getId(),
     sheetName: aba.getName(),
+    linhaAntes: antes,
     testadoEm: new Date().toISOString()
-  });
+  };
+
+  var registro = registrarStatusAutomacaoWMGJ_(payloadStatus);
   SpreadsheetApp.flush();
 
   var depois = aba.getLastRow();
@@ -182,7 +186,21 @@ function validarRegistroStatusAutomacaoWMGJ() {
     throw new Error('VALIDACAO_STATUS_FALHOU: última linha não contém idTeste.');
   }
 
-  return { ok: true, versao: WMGJ_AUTOMACAO_APPSCRIPT_VERSAO, etapa: 'validarRegistroStatusAutomacaoWMGJ', spreadsheetId: ss.getId(), sheetName: aba.getName(), linhaAntes: antes, linhaDepois: depois, idTeste: idTeste };
+  var resultado = {
+    ok: true,
+    versao: WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
+    etapa: 'validarRegistroStatusAutomacaoWMGJ',
+    spreadsheetId: ss.getId(),
+    sheetName: aba.getName(),
+    linhaAntes: antes,
+    linhaDepois: depois,
+    idTeste: idTeste,
+    registro: registro,
+    provaCruzada: '10_LOG_AUTOMACAO'
+  };
+
+  registrarLogAutomacaoWMGJ_('OK', 'PROVA_CRUZADA_STATUS_AUTOMACAO', resultado);
+  return resultado;
 }
 
 function removerGatilhosAutomacaoWMGJ_(opcoes) {
@@ -240,7 +258,8 @@ function registrarStatusAutomacaoWMGJ_(payload) {
   var ss = obterPlanilhaStatusAutomacaoWMGJ_();
   var aba = obterOuCriarAbaStatusAutomacaoWMGJ_(ss);
   aba.appendRow([new Date(), payload.versao || WMGJ_AUTOMACAO_APPSCRIPT_VERSAO, payload.etapa || '', payload.ok === true, JSON.stringify(payload), 'AppsScript', payload.erro || payload.mensagem || payload.idTeste || '']);
-  return { ok: true, spreadsheetId: ss.getId(), sheetName: aba.getName(), lastRow: aba.getLastRow() };
+  SpreadsheetApp.flush();
+  return { ok: true, spreadsheetId: ss.getId(), sheetName: aba.getName(), lastRow: aba.getLastRow(), lastColumn: aba.getLastColumn() };
 }
 
 function obterPlanilhaStatusAutomacaoWMGJ_() {
