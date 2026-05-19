@@ -1,61 +1,30 @@
 /**
- * WMGJ — Automação de gatilhos Apps Script
+ * WMGJ — Compatibilidade legada de gatilhos Apps Script
  *
- * Execute UMA vez no editor do Apps Script:
+ * Este módulo NÃO é mais a camada oficial de automação.
+ * A automação oficial foi consolidada em:
+ *   06_AUTOMACAO_APPSCRIPT_WMGJ.gs
  *
- *   instalarAutomacaoWMGJ()
- *
- * Isso cria gatilhos recorrentes para:
- * - preparar/enfileirar arquivos da pasta de entrada;
- * - processar fila em lotes pequenos;
- * - testar webhook internamente;
- * - registrar saúde do pipeline;
- * - manter operação auditável.
- *
- * Não coloque API keys aqui. Humanos adoram vazar segredo em repositório público,
- * mas vamos fingir que aprendemos alguma coisa.
+ * Mantemos estas funções apenas para não quebrar atalhos, menus ou chamadas antigas.
+ * Elas delegam para a automação consolidada e evitam criar gatilhos paralelos.
  */
 
+var WMGJ_AUTOMACAO_GATILHOS_LEGADO_VERSAO = 'v1.0.3-legado-delegado-para-06';
+
 function instalarAutomacaoWMGJ() {
-  removerGatilhosWMGJ_();
+  if (typeof instalarGatilhoAutomacaoWMGJ !== 'function') {
+    throw new Error('AUTOMACAO_CONSOLIDADA_NAO_CARREGADA: instalarGatilhoAutomacaoWMGJ ausente');
+  }
 
-  ScriptApp.newTrigger("jobPrepararPipelineWMGJ")
-    .timeBased()
-    .everyMinutes(15)
-    .create();
-
-  ScriptApp.newTrigger("jobProcessarFilaWMGJ")
-    .timeBased()
-    .everyMinutes(15)
-    .create();
-
-  ScriptApp.newTrigger("jobTesteSaudeWMGJ")
-    .timeBased()
-    .everyHours(6)
-    .create();
-
-  ScriptApp.newTrigger("jobRelatorioMensalWMGJ")
-    .timeBased()
-    .onMonthDay(1)
-    .atHour(8)
-    .create();
-
-  registrarLogWMGJ_("OK", "instalarAutomacaoWMGJ", "AppsScript", "Gatilhos automáticos instalados: preparar pipeline, processar fila, teste de saúde e relatório mensal");
-
-  return {
-    ok: true,
-    mensagem: "Automação WMGJ instalada com sucesso",
-    gatilhos: listarGatilhosWMGJ_()
-  };
+  return instalarGatilhoAutomacaoWMGJ();
 }
 
 function removerAutomacaoWMGJ() {
-  var removidos = removerGatilhosWMGJ_();
-  registrarLogWMGJ_("OK", "removerAutomacaoWMGJ", "AppsScript", "Gatilhos removidos: " + removidos);
-  return {
-    ok: true,
-    removidos: removidos
-  };
+  if (typeof removerGatilhosAutomacaoWMGJ !== 'function') {
+    throw new Error('AUTOMACAO_CONSOLIDADA_NAO_CARREGADA: removerGatilhosAutomacaoWMGJ ausente');
+  }
+
+  return removerGatilhosAutomacaoWMGJ();
 }
 
 function reinstalarAutomacaoWMGJ() {
@@ -64,89 +33,96 @@ function reinstalarAutomacaoWMGJ() {
 }
 
 function listarAutomacaoWMGJ() {
+  if (typeof diagnosticarAutomacaoAppsScriptWMGJ === 'function') {
+    return diagnosticarAutomacaoAppsScriptWMGJ();
+  }
+
   return {
     ok: true,
+    versao: WMGJ_AUTOMACAO_GATILHOS_LEGADO_VERSAO,
     gatilhos: listarGatilhosWMGJ_()
   };
 }
 
 function jobPrepararPipelineWMGJ() {
-  try {
-    var resultado = prepararPipelineConfiavelWMGJ();
-    registrarLogWMGJ_("OK", "jobPrepararPipelineWMGJ", "Trigger", JSON.stringify(resultado));
-    return resultado;
-  } catch (erro) {
-    registrarLogWMGJ_("ERRO", "jobPrepararPipelineWMGJ", "Trigger", erro && erro.message ? erro.message : String(erro));
-    return { ok: false, erro: erro && erro.message ? erro.message : String(erro) };
-  }
+  return executarAutomacaoOperacionalWMGJ_Legado_('jobPrepararPipelineWMGJ');
 }
 
 function jobProcessarFilaWMGJ() {
-  try {
-    var resultado = processarFilaWMGJ(10);
-    registrarLogWMGJ_("OK", "jobProcessarFilaWMGJ", "Trigger", JSON.stringify(resultado));
-    return resultado;
-  } catch (erro) {
-    registrarLogWMGJ_("ERRO", "jobProcessarFilaWMGJ", "Trigger", erro && erro.message ? erro.message : String(erro));
-    return { ok: false, erro: erro && erro.message ? erro.message : String(erro) };
-  }
+  return executarAutomacaoOperacionalWMGJ_Legado_('jobProcessarFilaWMGJ');
 }
 
 function jobTesteSaudeWMGJ() {
-  try {
-    var resultado = testarControleConfiabilidadeWMGJ();
-    atualizarStatusSaudePipelineWMGJ_(resultado);
-    registrarLogWMGJ_("OK", "jobTesteSaudeWMGJ", "Trigger", JSON.stringify(resultado));
-    return resultado;
-  } catch (erro) {
-    atualizarStatusSaudePipelineWMGJ_({ ok: false, erro: erro && erro.message ? erro.message : String(erro) });
-    registrarLogWMGJ_("ERRO", "jobTesteSaudeWMGJ", "Trigger", erro && erro.message ? erro.message : String(erro));
-    return { ok: false, erro: erro && erro.message ? erro.message : String(erro) };
+  if (typeof auditarOrganizarAppsScriptWMGJ === 'function') {
+    return auditarOrganizarAppsScriptWMGJ({ modo: 'JOB_LEGADO_SAUDE' });
   }
+
+  return executarAutomacaoOperacionalWMGJ_Legado_('jobTesteSaudeWMGJ');
 }
 
 function jobRelatorioMensalWMGJ() {
   try {
-    if (typeof runWMGJ === "function") {
+    if (typeof runWMGJ === 'function') {
       runWMGJ();
     }
 
-    registrarLogWMGJ_("OK", "jobRelatorioMensalWMGJ", "Trigger", "Rotina mensal executada. Conferir painel executivo e relatório PDF.");
+    registrarLogWMGJ_Legado_('OK', 'jobRelatorioMensalWMGJ', {
+      ok: true,
+      versao: WMGJ_AUTOMACAO_GATILHOS_LEGADO_VERSAO,
+      mensagem: 'Rotina mensal legada executada'
+    });
+
     return {
       ok: true,
-      mensagem: "Rotina mensal executada"
+      versao: WMGJ_AUTOMACAO_GATILHOS_LEGADO_VERSAO,
+      mensagem: 'Rotina mensal executada'
     };
   } catch (erro) {
-    registrarLogWMGJ_("ERRO", "jobRelatorioMensalWMGJ", "Trigger", erro && erro.message ? erro.message : String(erro));
-    return { ok: false, erro: erro && erro.message ? erro.message : String(erro) };
+    var falha = { ok: false, erro: erro && erro.message ? erro.message : String(erro) };
+    registrarLogWMGJ_Legado_('ERRO', 'jobRelatorioMensalWMGJ', falha);
+    return falha;
+  }
+}
+
+function executarAutomacaoOperacionalWMGJ_Legado_(origem) {
+  try {
+    if (typeof executarAutomacaoOperacionalWMGJ !== 'function') {
+      throw new Error('AUTOMACAO_CONSOLIDADA_NAO_CARREGADA: executarAutomacaoOperacionalWMGJ ausente');
+    }
+
+    var resultado = executarAutomacaoOperacionalWMGJ();
+    resultado.origemLegada = origem;
+    return resultado;
+  } catch (erro) {
+    var falha = {
+      ok: false,
+      versao: WMGJ_AUTOMACAO_GATILHOS_LEGADO_VERSAO,
+      origemLegada: origem,
+      erro: erro && erro.message ? erro.message : String(erro)
+    };
+    registrarLogWMGJ_Legado_('ERRO', origem, falha);
+    return falha;
   }
 }
 
 function atualizarStatusSaudePipelineWMGJ_(resultado) {
-  var ss = getPlanilha();
-  var aba = obterOuCriarAba_(ss, "13_CONTROLE_PIPELINE", [
-    "ETAPA", "COMPONENTE", "STATUS_ATUAL", "EVIDENCIA", "RISCO", "ACAO_CORRETIVA", "RESPONSAVEL", "SLA", "BLOQUEIA_PRODUCAO", "ULTIMA_VALIDACAO", "OBS"
-  ]);
-
-  var status = resultado && resultado.ok ? "OK_AUTOMATICO" : "ERRO_AUTOMATICO";
-  var obs = resultado && resultado.ok ? JSON.stringify(resultado).slice(0, 500) : String(resultado && resultado.erro ? resultado.erro : "Erro não especificado").slice(0, 500);
-
-  aba.appendRow([
-    "AUTO",
-    "Saúde do pipeline",
-    status,
-    "Teste automático recorrente",
-    resultado && resultado.ok ? "BAIXO" : "ALTO",
-    resultado && resultado.ok ? "Manter monitoramento" : "Verificar Execuções e 10_LOG_AUTOMACAO",
-    "TI / Operação",
-    "6h",
-    resultado && resultado.ok ? "NAO" : "SIM",
-    new Date(),
-    obs
-  ]);
+  if (typeof registrarStatusAutomacaoWMGJ_ === 'function') {
+    registrarStatusAutomacaoWMGJ_({
+      ok: !!(resultado && resultado.ok),
+      versao: WMGJ_AUTOMACAO_GATILHOS_LEGADO_VERSAO,
+      etapa: 'atualizarStatusSaudePipelineWMGJ_legado',
+      resultado: resultado,
+      registradoEm: new Date().toISOString()
+    });
+  }
 }
 
 function removerGatilhosWMGJ_() {
+  if (typeof removerGatilhosAutomacaoWMGJ === 'function') {
+    var resultado = removerGatilhosAutomacaoWMGJ();
+    return resultado && resultado.removidos ? resultado.removidos.length : 0;
+  }
+
   var nomes = {
     jobPrepararPipelineWMGJ: true,
     jobProcessarFilaWMGJ: true,
@@ -172,7 +148,16 @@ function listarGatilhosWMGJ_() {
     return {
       funcao: trigger.getHandlerFunction(),
       origem: String(trigger.getEventType()),
-      fonte: String(trigger.getTriggerSource())
+      fonte: String(trigger.getTriggerSource()),
+      triggerId: trigger.getUniqueId ? trigger.getUniqueId() : ''
     };
   });
+}
+
+function registrarLogWMGJ_Legado_(status, comando, payload) {
+  if (typeof registrarLogWMGJ_ === 'function') {
+    registrarLogWMGJ_(status, comando, 'AppsScript', JSON.stringify(payload));
+  } else {
+    Logger.log(JSON.stringify({ status: status, comando: comando, payload: payload }));
+  }
 }
