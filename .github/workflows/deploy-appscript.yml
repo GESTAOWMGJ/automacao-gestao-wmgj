@@ -1,22 +1,25 @@
-name: Deploy Apps Script
+name: Deploy Apps Script WMGJ
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'apps-script/**'
+      - 'src/**/*.gs'
+      - 'appsscript.json'
       - '.github/workflows/deploy-appscript.yml'
   workflow_dispatch:
 
 jobs:
   deploy:
+    name: Push code to Google Apps Script
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -24,18 +27,33 @@ jobs:
       - name: Install clasp
         run: npm install -g @google/clasp
 
-      - name: Configure clasp auth
-        run: echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
-
-      - name: Configure script id
+      - name: Validate required secrets
         run: |
-          cat > apps-script/.clasp.json <<EOF
+          test -n "${{ secrets.APPS_SCRIPT_ID }}" || (echo "Missing APPS_SCRIPT_ID secret" && exit 1)
+          test -n "${{ secrets.CLASPRC_JSON }}" || (echo "Missing CLASPRC_JSON secret" && exit 1)
+
+      - name: Configure clasp credentials
+        run: |
+          cat > ~/.clasprc.json <<'EOF'
+          ${{ secrets.CLASPRC_JSON }}
+          EOF
+
+      - name: Prepare Apps Script project files
+        run: |
+          mkdir -p build-appscript
+          cp appsscript.json build-appscript/appsscript.json
+          cp src/*.gs build-appscript/
+          cat > build-appscript/.clasp.json <<EOF
           {
             "scriptId": "${{ secrets.APPS_SCRIPT_ID }}",
             "rootDir": "."
           }
           EOF
 
-      - name: Push Apps Script
-        working-directory: apps-script
+      - name: Push to Apps Script
+        working-directory: build-appscript
         run: clasp push --force
+
+      - name: Create Apps Script version
+        working-directory: build-appscript
+        run: clasp version "GitHub Actions deploy $GITHUB_SHA" || true
