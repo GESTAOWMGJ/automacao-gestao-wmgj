@@ -1,6 +1,6 @@
 /**
  * WMGJ — Robô Gmail -> Classificação -> Extração -> Dashboard
- * Versão: v1.0.0-robo-gmail-dashboard
+ * Versão: v1.0.1-robo-gmail-dashboard-busca-ampla
  *
  * Objetivo:
  * - operar sobre a caixa Gmail autorizada no Apps Script, idealmente wmgjltda@gmail.com;
@@ -17,7 +17,7 @@
  * o deploy/autorização precisa estar vinculado a essa conta ou a uma conta com acesso legítimo.
  */
 
-var WMGJ_ROBO_GMAIL_DASHBOARD_VERSAO = 'v1.0.0-robo-gmail-dashboard';
+var WMGJ_ROBO_GMAIL_DASHBOARD_VERSAO = 'v1.0.1-robo-gmail-dashboard-busca-ampla';
 var WMGJ_GMAIL_CONTA_OPERACIONAL = 'wmgjltda@gmail.com';
 
 function rodarRoboGmailDashboardWMGJ() {
@@ -197,29 +197,38 @@ function executarEtapaRoboGmailDashboardWMGJ_(nomeEtapa, fn) {
 }
 
 function executarEtapaGmailRoboDashboardWMGJ_(opcoes) {
-  var query = montarQueryGmailRoboDashboardWMGJ_(opcoes);
+  var queryRestrita = montarQueryGmailRoboDashboardWMGJ_(opcoes);
 
   if (typeof indexarGmailFaturamentoWMGJ_V2 === 'function') {
-    return indexarGmailFaturamentoWMGJ_V2({
+    var payloadV2 = {
       limiteThreadsTotal: Number(opcoes.limiteGmailThreads || 50),
       limiteThreadsPorQuery: Number(opcoes.limiteThreadsPorQuery || 15),
       dias: Number(opcoes.diasGmail || 730),
       executarPipelineDepois: false,
-      incluirBuscaBruta: true,
-      queryCustom: query,
-      query: query
-    });
+      incluirBuscaBruta: true
+    };
+
+    // Só usa query manual se o operador informar explicitamente.
+    // Por padrão, deixa a V2 executar buscas amplas por termo/extensão + busca bruta.
+    if (opcoes.queryManual || opcoes.queryForcada) {
+      payloadV2.query = String(opcoes.queryManual || opcoes.queryForcada);
+    }
+
+    var resultadoV2 = indexarGmailFaturamentoWMGJ_V2(payloadV2);
+    resultadoV2.queryRestritaReferencia = queryRestrita;
+    resultadoV2.modoBuscaRobo = payloadV2.query ? 'QUERY_MANUAL_FORCADA' : 'BUSCA_AMPLA_ADAPTATIVA_V2';
+    return resultadoV2;
   }
 
   if (typeof indexarGmailFaturamentoWMGJ === 'function') {
     return indexarGmailFaturamentoWMGJ({
       limiteThreads: Number(opcoes.limiteGmailThreads || 50),
       executarPipelineDepois: false,
-      query: query
+      query: queryRestrita
     });
   }
 
-  return { ok: false, erro: 'INDEXADOR_GMAIL_NAO_ENCONTRADO', query: query };
+  return { ok: false, erro: 'INDEXADOR_GMAIL_NAO_ENCONTRADO', query: queryRestrita };
 }
 
 function executarEtapaXmlRoboDashboardWMGJ_(opcoes) {
@@ -293,7 +302,7 @@ function atualizarDashboardRoboGmailDashboardWMGJ_() {
 }
 
 function montarQueryGmailRoboDashboardWMGJ_(opcoes) {
-  if (opcoes && opcoes.query) return String(opcoes.query);
+  if (opcoes && (opcoes.queryManual || opcoes.queryForcada)) return String(opcoes.queryManual || opcoes.queryForcada);
 
   var dias = Number((opcoes && opcoes.diasGmail) || 730);
   return [
