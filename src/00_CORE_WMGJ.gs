@@ -28,6 +28,25 @@ function getPlanilha() {
   return SpreadsheetApp.openById(cfg.SPREADSHEET_ID);
 }
 
+function doGet(e) {
+  try {
+    var parametros = e && e.parameter ? e.parameter : {};
+    var resultado = executarComandoWMGJ({
+      comando: parametros.comando || "status",
+      token: parametros.token || parametros.apiToken || parametros.api_token || "",
+      origem: "doGet"
+    });
+    return respostaJson_(resultado);
+  } catch (erro) {
+    registrarLogWMGJ_("ERRO", "doGet", "AppsScript", erro && erro.message ? erro.message : String(erro));
+    return respostaJson_({
+      ok: false,
+      etapa: "doGet",
+      erro: erro && erro.message ? erro.message : String(erro)
+    });
+  }
+}
+
 function doPost(e) {
   try {
     var contents = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
@@ -48,8 +67,23 @@ function executarComandoWMGJ(payload) {
   payload = payload || {};
   var comando = String(payload.comando || "").trim();
 
-  if (comando === "status") return obterStatusWMGJ();
+  if (comando === "" || comando === "status") return obterStatusWMGJ();
   if (comando === "teste_execucao") return testarExecucaoWMGJ(payload);
+
+  if (comandoRequerAutorizacaoApiWMGJ_(comando)) {
+    var autorizacao = validarAutorizacaoApiWMGJ_(payload);
+    if (!autorizacao.ok) {
+      registrarLogWMGJ_("API_BLOQUEADA", comando || "SEM_COMANDO", payload.origem || "API", autorizacao.motivo);
+      return {
+        ok: false,
+        erro: "Comando operacional bloqueado por segurança",
+        codigo: "API_TOKEN_AUSENTE_OU_INVALIDO",
+        comando: comando,
+        detalhe: autorizacao.motivo
+      };
+    }
+  }
+
   if (comando === "run" || comando === "runWMGJ" || comando === "operacao_total") return runWMGJ();
   if (comando === "gmail" || comando === "gmail_bancario") return importarGmailWMGJ();
   if (comando === "organizar") return organizarPastasWMGJ();
@@ -62,6 +96,73 @@ function executarComandoWMGJ(payload) {
     erro: "Comando não reconhecido",
     comando: comando
   };
+}
+
+function comandoRequerAutorizacaoApiWMGJ_(comando) {
+  var comandosMutaveis = {
+    run: true,
+    runWMGJ: true,
+    operacao_total: true,
+    gmail: true,
+    gmail_bancario: true,
+    organizar: true,
+    dashboard: true,
+    conciliar: true
+  };
+  return comandosMutaveis[String(comando || "")] === true;
+}
+
+function validarAutorizacaoApiWMGJ_(payload) {
+  payload = payload || {};
+
+  var esperado = String(PropertiesService.getScriptProperties().getProperty("WMGJ_API_TOKEN") || "").trim();
+  if (!esperado) {
+    return {
+      ok: false,
+      motivo: "WMGJ_API_TOKEN não configurado em ScriptProperties"
+    };
+  }
+
+  var recebido = String(payload.token || payload.apiToken || payload.api_token || "").trim();
+  if (!recebido || recebido !== esperado) {
+    return {
+      ok: false,
+      motivo: "Token de API ausente ou inválido"
+    };
+  }
+
+  return {
+    ok: true,
+    motivo: "Token de API validado"
+  };
+}
+
+function auditarSegurancaApiWMGJ() {
+  var tokenConfigurado = String(PropertiesService.getScriptProperties().getProperty("WMGJ_API_TOKEN") || "").trim() !== "";
+  var testes = [];
+
+  testes.push({
+    caso: "status_sem_token",
+    resultado: executarComandoWMGJ({ comando: "status", origem: "auditoria_api" }).ok === true
+  });
+
+  var bloqueio = executarComandoWMGJ({ comando: "run", origem: "auditoria_api" });
+  testes.push({
+    caso: "run_sem_token_bloqueado",
+    resultado: bloqueio.ok === false && bloqueio.codigo === "API_TOKEN_AUSENTE_OU_INVALIDO"
+  });
+
+  var ok = testes.every(function(t) { return t.resultado === true; });
+  var resultado = {
+    ok: ok,
+    etapa: "auditarSegurancaApiWMGJ",
+    tokenConfigurado: tokenConfigurado,
+    testes: testes,
+    auditadoEm: new Date().toISOString()
+  };
+
+  registrarLogWMGJ_(ok ? "OK" : "ERRO", "auditarSegurancaApiWMGJ", "AppsScript", JSON.stringify(resultado));
+  return resultado;
 }
 
 function runWMGJ() {
