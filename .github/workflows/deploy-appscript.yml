@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'src/**/*.gs'
+      - 'tools/**/*.js'
       - 'appsscript.json'
       - '.github/workflows/deploy-appscript.yml'
   workflow_dispatch:
@@ -23,6 +24,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Audit Apps Script source boundaries
+        run: node tools/audit-appscript.js
 
       - name: Install clasp
         run: npm install -g @google/clasp
