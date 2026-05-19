@@ -1,17 +1,19 @@
 /**
  * WMGJ — Testes controlados de confiabilidade do pipeline
  *
- * Execute no Apps Script, nesta ordem:
- *   1. testeValidarJsonIAWMGJ()
- *   2. testeDeduplicacaoMemoriaWMGJ()
- *   3. testePipelineArquivosReaisWMGJ()
- *   4. testeSuiteConfiabilidadePipelineWMGJ()
+ * Entrada pública mantida:
+ *   testeSuiteConfiabilidadePipelineWMGJ()
+ *
+ * As rotinas específicas deste arquivo usam sufixo _CONTROLADO para não
+ * colidir com os wrappers oficiais definidos em 01_PIPELINE_CONFIABILIDADE_WMGJ.gs.
+ * Apps Script não tem namespace decente; então a gente cria um no braço,
+ * como se estivéssemos montando avião com fita crepe.
  *
  * Estes testes NÃO escrevem na base financeira.
  * Eles validam JSON, memória-base, deduplicação e fila.
  */
 
-function testeValidarJsonIAWMGJ() {
+function testeValidarJsonIAWMGJ_CONTROLADO() {
   var casos = [];
 
   casos.push({
@@ -67,16 +69,16 @@ function testeValidarJsonIAWMGJ() {
     };
   });
 
-  registrarLogWMGJ_("TESTE_OK", "testeValidarJsonIAWMGJ", "AppsScript", JSON.stringify(resultados));
+  registrarLogWMGJ_("TESTE_OK", "testeValidarJsonIAWMGJ_CONTROLADO", "AppsScript", JSON.stringify(resultados));
 
   return {
     ok: true,
-    teste: "testeValidarJsonIAWMGJ",
+    teste: "testeValidarJsonIAWMGJ_CONTROLADO",
     resultados: resultados
   };
 }
 
-function testeDeduplicacaoMemoriaWMGJ() {
+function testeDeduplicacaoMemoriaWMGJ_CONTROLADO() {
   garantirAbasControlePipelineWMGJ_();
 
   var cfg = getConfigWMGJ_();
@@ -110,11 +112,11 @@ function testeDeduplicacaoMemoriaWMGJ() {
     throw new Error("Deduplicação não reconheceu ID_ORIGEM + HASH após registro na memória-base.");
   }
 
-  registrarLogWMGJ_("TESTE_OK", "testeDeduplicacaoMemoriaWMGJ", "AppsScript", "Deduplicação validada por ID_ORIGEM + HASH");
+  registrarLogWMGJ_("TESTE_OK", "testeDeduplicacaoMemoriaWMGJ_CONTROLADO", "AppsScript", "Deduplicação validada por ID_ORIGEM + HASH");
 
   return {
     ok: true,
-    teste: "testeDeduplicacaoMemoriaWMGJ",
+    teste: "testeDeduplicacaoMemoriaWMGJ_CONTROLADO",
     criterio: "ID_ORIGEM + HASH",
     idOrigem: idTeste,
     hash: hashTeste,
@@ -122,27 +124,27 @@ function testeDeduplicacaoMemoriaWMGJ() {
   };
 }
 
-function testePipelineArquivosReaisWMGJ() {
+function testePipelineArquivosReaisWMGJ_CONTROLADO() {
   var preparo = prepararPipelineConfiavelWMGJ();
   var processamento = processarFilaWMGJ(3);
 
   var resultado = {
     ok: true,
-    teste: "testePipelineArquivosReaisWMGJ",
+    teste: "testePipelineArquivosReaisWMGJ_CONTROLADO",
     preparo: preparo,
     processamento: processamento,
     criterio: "Nenhuma falha individual deve derrubar o lote inteiro"
   };
 
-  registrarLogWMGJ_("TESTE_OK", "testePipelineArquivosReaisWMGJ", "AppsScript", JSON.stringify(resultado));
+  registrarLogWMGJ_("TESTE_OK", "testePipelineArquivosReaisWMGJ_CONTROLADO", "AppsScript", JSON.stringify(resultado));
 
   return resultado;
 }
 
 function testeSuiteConfiabilidadePipelineWMGJ() {
-  var json = testeValidarJsonIAWMGJ();
-  var dedup = testeDeduplicacaoMemoriaWMGJ();
-  var pipeline = testePipelineArquivosReaisWMGJ();
+  var json = testeValidarJsonIAWMGJ_CONTROLADO();
+  var dedup = testeDeduplicacaoMemoriaWMGJ_CONTROLADO();
+  var pipeline = testePipelineArquivosReaisWMGJ_CONTROLADO();
 
   var resultado = {
     ok: true,
