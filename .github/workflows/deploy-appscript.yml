@@ -58,6 +58,10 @@ jobs:
         working-directory: build-appscript
         run: clasp version "GitHub Actions deploy $GITHUB_SHA" || true
 
+      - name: Validate status sheet write
+        working-directory: build-appscript
+        run: clasp run validarRegistroStatusAutomacaoWMGJ
+
       - name: Audit and organize Apps Script
         working-directory: build-appscript
         run: clasp run auditarOrganizarAppsScriptWMGJ || true
