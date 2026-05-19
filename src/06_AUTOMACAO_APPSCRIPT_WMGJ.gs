@@ -11,7 +11,7 @@
  * prepararPipelineConfiavelWMGJ_V3 -> processarFilaWMGJ_V3
  */
 
-var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.4-status-automacao-planilha-mestre';
+var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.5-validacao-estrita-status';
 var WMGJ_PLANILHA_MESTRE_ID = '15LgI2U2dtM7vnrxFsiQMPTvBapBDg5ftgGttx7Pw0Cw';
 
 var WMGJ_FUNCAO_AUTOMACAO_PRINCIPAL = 'executarAutomacaoOperacionalWMGJ';
@@ -179,16 +179,48 @@ function diagnosticarAutomacaoAppsScriptWMGJ() {
 }
 
 function testarRegistroStatusAutomacaoWMGJ() {
-  var resultado = {
+  return validarRegistroStatusAutomacaoWMGJ();
+}
+
+function validarRegistroStatusAutomacaoWMGJ() {
+  var ss = obterPlanilhaStatusAutomacaoWMGJ_();
+  var aba = obterOuCriarAbaStatusAutomacaoWMGJ_(ss);
+  var antes = aba.getLastRow();
+  var idTeste = 'STATUS_TESTE_' + new Date().getTime();
+
+  var payload = {
     ok: true,
     versao: WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
-    etapa: 'testarRegistroStatusAutomacaoWMGJ',
-    mensagem: 'Registro de status validado automaticamente',
+    etapa: 'validarRegistroStatusAutomacaoWMGJ',
+    idTeste: idTeste,
+    spreadsheetId: ss.getId(),
+    sheetName: aba.getName(),
     testadoEm: new Date().toISOString()
   };
 
-  registrarStatusAutomacaoWMGJ_(resultado);
-  return resultado;
+  registrarStatusAutomacaoWMGJ_(payload);
+  SpreadsheetApp.flush();
+
+  var depois = aba.getLastRow();
+  if (depois <= antes) {
+    throw new Error('VALIDACAO_STATUS_FALHOU: appendRow não aumentou a quantidade de linhas em 15_STATUS_AUTOMACAO.');
+  }
+
+  var resumo = String(aba.getRange(depois, 5).getDisplayValue() || '');
+  if (resumo.indexOf(idTeste) === -1) {
+    throw new Error('VALIDACAO_STATUS_FALHOU: última linha não contém o idTeste esperado.');
+  }
+
+  return {
+    ok: true,
+    versao: WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
+    etapa: 'validarRegistroStatusAutomacaoWMGJ',
+    spreadsheetId: ss.getId(),
+    sheetName: aba.getName(),
+    linhaAntes: antes,
+    linhaDepois: depois,
+    idTeste: idTeste
+  };
 }
 
 function removerGatilhosAutomacaoWMGJ_(opcoes) {
@@ -253,27 +285,25 @@ function registrarLogAutomacaoWMGJ_(status, comando, payload) {
 }
 
 function registrarStatusAutomacaoWMGJ_(payload) {
-  try {
-    var ss = obterPlanilhaStatusAutomacaoWMGJ_();
-    var aba = obterOuCriarAbaStatusAutomacaoWMGJ_(ss);
+  var ss = obterPlanilhaStatusAutomacaoWMGJ_();
+  var aba = obterOuCriarAbaStatusAutomacaoWMGJ_(ss);
 
-    aba.appendRow([
-      new Date(),
-      payload.versao || WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
-      payload.etapa || '',
-      payload.ok === true,
-      JSON.stringify(payload),
-      'AppsScript',
-      payload.erro || payload.mensagem || ''
-    ]);
+  aba.appendRow([
+    new Date(),
+    payload.versao || WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
+    payload.etapa || '',
+    payload.ok === true,
+    JSON.stringify(payload),
+    'AppsScript',
+    payload.erro || payload.mensagem || payload.idTeste || ''
+  ]);
 
-  } catch (erro) {
-    Logger.log(JSON.stringify({
-      status: 'FALHA_REGISTRAR_STATUS_AUTOMACAO',
-      erro: erro && erro.message ? erro.message : String(erro),
-      payload: payload
-    }));
-  }
+  return {
+    ok: true,
+    spreadsheetId: ss.getId(),
+    sheetName: aba.getName(),
+    lastRow: aba.getLastRow()
+  };
 }
 
 function obterPlanilhaStatusAutomacaoWMGJ_() {
