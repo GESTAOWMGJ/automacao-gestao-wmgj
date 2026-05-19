@@ -78,6 +78,14 @@ jobs:
         working-directory: build-appscript
         run: clasp run diagnosticarAutomacaoAppsScriptWMGJ || true
 
+      - name: Diagnose Gmail dashboard robot
+        working-directory: build-appscript
+        run: clasp run diagnosticarRoboGmailDashboardWMGJ
+
+      - name: Run Gmail dashboard robot controlled test
+        working-directory: build-appscript
+        run: clasp run rodarRoboGmailDashboardWMGJ_Teste20
+
       - name: Install Apps Script automation trigger
         working-directory: build-appscript
         run: clasp run instalarGatilhoAutomacaoWMGJ
