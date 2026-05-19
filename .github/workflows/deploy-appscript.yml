@@ -57,3 +57,11 @@ jobs:
       - name: Create Apps Script version
         working-directory: build-appscript
         run: clasp version "GitHub Actions deploy $GITHUB_SHA" || true
+
+      - name: Diagnose Apps Script automation
+        working-directory: build-appscript
+        run: clasp run diagnosticarAutomacaoAppsScriptWMGJ || true
+
+      - name: Install Apps Script automation trigger
+        working-directory: build-appscript
+        run: clasp run instalarGatilhoAutomacaoWMGJ
