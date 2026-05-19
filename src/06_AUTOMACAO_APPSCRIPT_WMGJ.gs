@@ -3,7 +3,7 @@
  * Fonte única de planilha: getConfigWMGJ_().SPREADSHEET_ID em 00_CORE_WMGJ.gs.
  */
 
-var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.8-prova-cruzada-status';
+var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.9-robo-gmail-dashboard';
 var WMGJ_FUNCAO_AUTOMACAO_PRINCIPAL = 'executarAutomacaoOperacionalWMGJ';
 
 var WMGJ_GATILHOS_OPERACIONAIS_OBSOLETOS = {
@@ -29,13 +29,40 @@ function executarAutomacaoOperacionalWMGJ() {
       versao: WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
       etapa: 'executarAutomacaoOperacionalWMGJ',
       inicio: inicio.toISOString(),
-      fim: new Date().toISOString(),
+      fim: null,
       preparo: prepararPipelineConfiavelWMGJ_V3(100),
-      processamento: processarFilaWMGJ_V3(20)
+      processamento: processarFilaWMGJ_V3(20),
+      roboGmailDashboard: null
     };
 
+    if (typeof executarRoboGmailDashboardWMGJ === 'function') {
+      resultado.roboGmailDashboard = executarRoboGmailDashboardWMGJ({
+        modo: 'GATILHO_15_MINUTOS_CONTROLADO',
+        limiteGmailThreads: 20,
+        limiteThreadsPorQuery: 10,
+        diasGmail: 730,
+        limiteXml: 20,
+        limiteExtracao: 10,
+        limiteFormatacao: 20,
+        limiteParser: 20,
+        executarGmail: true,
+        executarXml: true,
+        executarPipelineDocumental: true,
+        executarRelatorioSocios: false,
+        executarDashboard: true
+      });
+
+      if (resultado.roboGmailDashboard && resultado.roboGmailDashboard.ok === false) {
+        resultado.ok = false;
+      }
+    } else {
+      resultado.roboGmailDashboard = { ok: false, aviso: 'executarRoboGmailDashboardWMGJ não encontrada' };
+      resultado.ok = false;
+    }
+
+    resultado.fim = new Date().toISOString();
     registrarStatusAutomacaoWMGJ_(resultado);
-    registrarLogAutomacaoWMGJ_('OK', 'executarAutomacaoOperacionalWMGJ', resultado);
+    registrarLogAutomacaoWMGJ_(resultado.ok ? 'OK' : 'ALERTA', 'executarAutomacaoOperacionalWMGJ', resultado);
     return resultado;
   } catch (erro) {
     var falha = {
@@ -65,6 +92,8 @@ function instalarGatilhoAutomacaoWMGJ() {
     ok: true,
     versao: WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
     etapa: 'instalarGatilhoAutomacaoWMGJ',
+    funcaoPrincipal: WMGJ_FUNCAO_AUTOMACAO_PRINCIPAL,
+    incluiRoboGmailDashboard: typeof executarRoboGmailDashboardWMGJ === 'function',
     frequencia: '15_MINUTOS',
     auditoriaAntes: auditoriaAntes,
     removidosAntesInstalacao: removidos,
@@ -115,6 +144,7 @@ function auditarOrganizarAppsScriptWMGJ(opcoes) {
     spreadsheetId: ss.getId(),
     planilha: ss.getName(),
     v3Disponivel: typeof processarFilaWMGJ_V3 === 'function',
+    roboGmailDashboardDisponivel: typeof executarRoboGmailDashboardWMGJ === 'function',
     coreDisponivel: typeof getPlanilha === 'function',
     triggersAntes: triggersAntes,
     problemas: problemas,
@@ -140,6 +170,7 @@ function diagnosticarAutomacaoAppsScriptWMGJ() {
     spreadsheetId: ss.getId(),
     planilha: ss.getName(),
     v3Disponivel: typeof processarFilaWMGJ_V3 === 'function',
+    roboGmailDashboardDisponivel: typeof executarRoboGmailDashboardWMGJ === 'function',
     gatilhosAutomacao: gatilhosAutomacao,
     totalGatilhosAutomacao: gatilhosAutomacao.length,
     todosGatilhos: triggers,
