@@ -108,7 +108,6 @@ function collectTopLevelVars(text, fileRel) {
 
       for (; j < text.length; j++) {
         const c = text[j];
-
         if (c === ';' && localDepth === 0) break;
 
         if ((c === ',' && localDepth === 0) || c === '=') {
@@ -144,6 +143,48 @@ function collectTopLevelVars(text, fileRel) {
   }
 
   return owners;
+}
+
+function auditApiSecurity(srcGsFiles) {
+  const allSrc = srcGsFiles.map(file => fs.readFileSync(file, 'utf8')).join('\n');
+  const corePath = path.join(srcDir, '00_CORE_WMGJ.gs');
+  const core = fs.existsSync(corePath) ? fs.readFileSync(corePath, 'utf8') : '';
+  const mutableCommands = ['run', 'runWMGJ', 'operacao_total', 'gmail', 'gmail_bancario', 'organizar', 'dashboard', 'conciliar'];
+
+  if (!core.includes('function validarAutorizacaoApiWMGJ_')) {
+    errors.push('API sem validarAutorizacaoApiWMGJ_ em 00_CORE_WMGJ.gs. Comandos mutaveis precisam de token.');
+  }
+
+  if (!core.includes('WMGJ_API_TOKEN')) {
+    errors.push('API sem leitura de WMGJ_API_TOKEN em ScriptProperties.');
+  }
+
+  if (!core.includes('function comandoRequerAutorizacaoApiWMGJ_')) {
+    errors.push('API sem lista central de comandos mutaveis protegidos.');
+  }
+
+  if (!core.includes('API_TOKEN_AUSENTE_OU_INVALIDO')) {
+    errors.push('API sem retorno padronizado para token ausente ou invalido.');
+  }
+
+  mutableCommands.forEach(command => {
+    if (!core.includes(command)) warnings.push('Comando mutavel esperado nao encontrado na API: ' + command);
+  });
+
+  const dangerousDirectPatterns = [
+    /if\s*\(\s*comando\s*===\s*['"]run['"][\s\S]{0,160}return\s+runWMGJ\s*\(/,
+    /if\s*\(\s*comando\s*===\s*['"]gmail['"][\s\S]{0,160}return\s+importarGmailWMGJ\s*\(/,
+    /if\s*\(\s*comando\s*===\s*['"]organizar['"][\s\S]{0,160}return\s+organizarPastasWMGJ\s*\(/,
+    /if\s*\(\s*comando\s*===\s*['"]dashboard['"][\s\S]{0,160}return\s+atualizarDashboardWMGJ\s*\(/
+  ];
+
+  if (dangerousDirectPatterns.some(pattern => pattern.test(core)) && !core.includes('comandoRequerAutorizacaoApiWMGJ_(comando)')) {
+    errors.push('API parece expor comandos mutaveis diretamente sem gate de autorizacao.');
+  }
+
+  if (allSrc.includes('doPost(e)') && !core.includes('validarAutorizacaoApiWMGJ_')) {
+    errors.push('doPost encontrado sem camada de autorizacao no core.');
+  }
 }
 
 if (!fs.existsSync(srcDir)) errors.push('Diretorio src/ nao encontrado.');
@@ -194,6 +235,8 @@ const uniqueSpreadsheetOwners = Array.from(new Set(spreadsheetIdOccurrences));
 if (uniqueSpreadsheetOwners.length > 1) {
   errors.push('ID da planilha mestre aparece em multiplos arquivos src/: ' + uniqueSpreadsheetOwners.join(', ') + '. Use getConfigWMGJ_().SPREADSHEET_ID como fonte unica.');
 }
+
+auditApiSecurity(srcGsFiles);
 
 if (fs.existsSync(workflowPath)) {
   const workflow = fs.readFileSync(workflowPath, 'utf8');
