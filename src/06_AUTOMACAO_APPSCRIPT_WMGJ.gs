@@ -6,12 +6,13 @@
  * - Não alterar o motor V3.
  * - Evitar gatilhos duplicados de módulos legados.
  * - Auditar e organizar o Apps Script após cada deploy.
+ * - Gravar status operacional SEMPRE na planilha mestre oficial.
  *
  * Fluxo automático:
  * prepararPipelineConfiavelWMGJ_V3 -> processarFilaWMGJ_V3
  */
 
-var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.5-validacao-estrita-status';
+var WMGJ_AUTOMACAO_APPSCRIPT_VERSAO = 'v1.0.6-status-forcado-planilha-mestre';
 var WMGJ_PLANILHA_MESTRE_ID = '15LgI2U2dtM7vnrxFsiQMPTvBapBDg5ftgGttx7Pw0Cw';
 
 var WMGJ_FUNCAO_AUTOMACAO_PRINCIPAL = 'executarAutomacaoOperacionalWMGJ';
@@ -188,6 +189,10 @@ function validarRegistroStatusAutomacaoWMGJ() {
   var antes = aba.getLastRow();
   var idTeste = 'STATUS_TESTE_' + new Date().getTime();
 
+  if (ss.getId() !== WMGJ_PLANILHA_MESTRE_ID) {
+    throw new Error('VALIDACAO_STATUS_FALHOU: planilha de status divergente. Atual=' + ss.getId() + ' Esperada=' + WMGJ_PLANILHA_MESTRE_ID);
+  }
+
   var payload = {
     ok: true,
     versao: WMGJ_AUTOMACAO_APPSCRIPT_VERSAO,
@@ -307,33 +312,37 @@ function registrarStatusAutomacaoWMGJ_(payload) {
 }
 
 function obterPlanilhaStatusAutomacaoWMGJ_() {
-  if (typeof getPlanilha === 'function') {
-    try {
-      var ss1 = getPlanilha();
-      if (ss1) return ss1;
-    } catch (erroGetPlanilha) {}
-  }
+  try {
+    return SpreadsheetApp.openById(WMGJ_PLANILHA_MESTRE_ID);
+  } catch (erroMestre) {
+    var idProp = PropertiesService.getScriptProperties().getProperty('WMGJ_SPREADSHEET_ID');
+    if (idProp) {
+      return SpreadsheetApp.openById(idProp);
+    }
 
-  if (typeof getPlanilhaWMGJ_Compat_ === 'function') {
-    try {
-      var ss2 = getPlanilhaWMGJ_Compat_();
-      if (ss2) return ss2;
-    } catch (erroCompat) {}
-  }
+    if (typeof getPlanilha === 'function') {
+      try {
+        var ss1 = getPlanilha();
+        if (ss1) return ss1;
+      } catch (erroGetPlanilha) {}
+    }
 
-  if (typeof getPlanilhaWMGJ_Automacao_ === 'function') {
-    try {
-      var ss3 = getPlanilhaWMGJ_Automacao_();
-      if (ss3) return ss3;
-    } catch (erroAuto) {}
-  }
+    if (typeof getPlanilhaWMGJ_Compat_ === 'function') {
+      try {
+        var ss2 = getPlanilhaWMGJ_Compat_();
+        if (ss2) return ss2;
+      } catch (erroCompat) {}
+    }
 
-  var idProp = PropertiesService.getScriptProperties().getProperty('WMGJ_SPREADSHEET_ID');
-  if (idProp) {
-    return SpreadsheetApp.openById(idProp);
-  }
+    if (typeof getPlanilhaWMGJ_Automacao_ === 'function') {
+      try {
+        var ss3 = getPlanilhaWMGJ_Automacao_();
+        if (ss3) return ss3;
+      } catch (erroAuto) {}
+    }
 
-  return SpreadsheetApp.openById(WMGJ_PLANILHA_MESTRE_ID);
+    throw erroMestre;
+  }
 }
 
 function obterOuCriarAbaStatusAutomacaoWMGJ_(ss) {
