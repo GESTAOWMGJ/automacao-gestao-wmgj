@@ -78,6 +78,14 @@ jobs:
         working-directory: build-appscript
         run: clasp run diagnosticarAutomacaoAppsScriptWMGJ || true
 
+      - name: Diagnose financial dashboard
+        working-directory: build-appscript
+        run: clasp run diagnosticarDashboardFinanceiroWMGJ
+
+      - name: Update financial dashboard
+        working-directory: build-appscript
+        run: clasp run atualizarDashboardFinanceiro
+
       - name: Diagnose Gmail dashboard robot
         working-directory: build-appscript
         run: clasp run diagnosticarRoboGmailDashboardWMGJ
