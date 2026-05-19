@@ -25,6 +25,127 @@ function rel(file) {
   return path.relative(root, file).replace(/\\/g, '/');
 }
 
+function collectTopLevelVars(text, fileRel) {
+  const owners = [];
+  let depth = 0;
+  let inString = null;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let token = '';
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (inLineComment) {
+      if (ch === '\n') inLineComment = false;
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (ch === '*' && next === '/') {
+        inBlockComment = false;
+        i++;
+      }
+      continue;
+    }
+
+    if (inString) {
+      if (ch === '\\') {
+        i++;
+        continue;
+      }
+      if (ch === inString) inString = null;
+      continue;
+    }
+
+    if (ch === '/' && next === '/') {
+      inLineComment = true;
+      i++;
+      continue;
+    }
+
+    if (ch === '/' && next === '*') {
+      inBlockComment = true;
+      i++;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'" || ch === '`') {
+      inString = ch;
+      continue;
+    }
+
+    if (ch === '{') {
+      depth++;
+      token = '';
+      continue;
+    }
+
+    if (ch === '}') {
+      depth = Math.max(0, depth - 1);
+      token = '';
+      continue;
+    }
+
+    if (depth !== 0) {
+      token = '';
+      continue;
+    }
+
+    if (/[$A-Za-z0-9_]/.test(ch)) {
+      token += ch;
+      continue;
+    }
+
+    if (token === 'var' || token === 'let' || token === 'const') {
+      let j = i;
+      while (/\s/.test(text[j] || '')) j++;
+
+      const names = [];
+      let name = '';
+      let localDepth = 0;
+
+      for (; j < text.length; j++) {
+        const c = text[j];
+
+        if (c === ';' && localDepth === 0) break;
+
+        if ((c === ',' && localDepth === 0) || c === '=') {
+          if (name && /^[A-Za-z_$][\w$]*$/.test(name)) names.push(name);
+          name = '';
+
+          if (c === '=') {
+            j++;
+            while (j < text.length) {
+              const v = text[j];
+              if ('([{'.includes(v)) localDepth++;
+              if (')]}'.includes(v)) localDepth = Math.max(0, localDepth - 1);
+              if ((v === ',' || v === ';') && localDepth === 0) {
+                j--;
+                break;
+              }
+              j++;
+            }
+          }
+          continue;
+        }
+
+        if (/[$A-Za-z0-9_]/.test(c)) name += c;
+        else if (!/\s/.test(c)) name = '';
+      }
+
+      if (name && /^[A-Za-z_$][\w$]*$/.test(name)) names.push(name);
+      names.forEach(name => owners.push([name, fileRel]));
+      i = j;
+    }
+
+    token = '';
+  }
+
+  return owners;
+}
+
 if (!fs.existsSync(srcDir)) errors.push('Diretorio src/ nao encontrado.');
 
 const srcGsFiles = listFiles(srcDir, file => file.endsWith('.gs')).sort();
@@ -50,11 +171,9 @@ for (const file of srcGsFiles) {
     functionOwners.get(name).push(fileRel);
   }
 
-  const globalRegex = /^\s*var\s+([A-Za-z_$][\w$]*)\s*=/gm;
-  while ((match = globalRegex.exec(text)) !== null) {
-    const name = match[1];
+  for (const [name, owner] of collectTopLevelVars(text, fileRel)) {
     if (!globalVarOwners.has(name)) globalVarOwners.set(name, []);
-    globalVarOwners.get(name).push(fileRel);
+    globalVarOwners.get(name).push(owner);
   }
 
   const literalRegex = /15LgI2U2dtM7vnrxFsiQMPTvBapBDg5ftgGttx7Pw0Cw/g;
