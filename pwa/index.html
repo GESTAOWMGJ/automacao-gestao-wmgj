@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#173b63" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <title>WMGJ Operação</title>
+</head>
+<body>
+  <main id="app">
+    <section class="shell">
+      <p class="eyebrow">WMGJ OPERAÇÃO</p>
+      <h1>Painel financeiro e auditoria</h1>
+      <p>Aplicativo instalável para acompanhar receita, recebimentos, pendências, conciliação e fechamento mensal.</p>
+      <div class="grid">
+        <article><span>Receita emitida</span><strong id="receita">R$ 0,00</strong></article>
+        <article><span>Recebido</span><strong id="recebido">R$ 0,00</strong></article>
+        <article><span>Em aberto</span><strong id="aberto">R$ 0,00</strong></article>
+        <article><span>Pendências</span><strong id="pendencias">0</strong></article>
+      </div>
+      <button id="atualizar">Atualizar status</button>
+      <pre id="status">Aguardando conexão com endpoint operacional.</pre>
+    </section>
+  </main>
+  <script src="/src/app.js"></script>
+</body>
+</html>
