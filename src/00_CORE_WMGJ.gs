@@ -451,38 +451,46 @@ function responderJsonWMGJ(obj) {
   return respostaJson_(obj);
 }
 
-function testarWebhookInternoTesteExecucao() {
-  var evento = {
+function montarEventoTesteExecucaoWMGJ_() {
+  return {
     postData: {
       contents: JSON.stringify({
         comando: "teste_execucao",
         origem: "AppsScript",
-        ambiente: "producao",
+        ambiente: "teste_interno",
         timestamp: new Date().toISOString()
       })
     }
   };
-
-  var response = doPost(evento);
-  Logger.log(response.getContent());
-  return response.getContent();
 }
 
 function testarWebhookInterno() {
+  var response = doPost(montarEventoTesteExecucaoWMGJ_());
+  var texto = response.getContent();
+  Logger.log(texto);
+  return texto;
+}
+
+function testarWebhookInternoTesteExecucao() {
+  return testarWebhookInterno();
+}
+
+function testarWebhookPublicadoWMGJ() {
   var cfg = getConfigWMGJ_();
   var options = {
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify({
       comando: "teste_execucao",
-      origem: "AppsScript",
-      ambiente: "producao",
+      origem: "UrlFetchApp",
+      ambiente: "webapp_publicado",
       timestamp: new Date().toISOString()
     }),
     muteHttpExceptions: true
   };
 
   var response = UrlFetchApp.fetch(cfg.WEBAPP_URL, options);
-  Logger.log(response.getContentText());
-  return response.getContentText();
+  var texto = response.getContentText();
+  Logger.log(texto);
+  return texto;
 }
