@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.2.0-gemini-api-validada - 2026-07-13
+
+### Integração Gemini
+
+- Chave da Gemini API validada por chamada real no Apps Script.
+- Resposta direta confirmada: `{"ok":true,"origem":"gemini"}`.
+- Modelo padrão do classificador atualizado para `gemini-3.5-flash`, conforme configuração que respondeu no projeto validado.
+- `GEMINI_API_KEY` e `GEMINI_MODEL` permanecem exclusivamente em Script Properties.
+- Adicionada normalização do nome do modelo para impedir formatos inválidos como `models/...`, aspas e sufixo `:generateContent`.
+- Adicionado teste direto `testeDiretoGeminiWMGJ()` sem fallback.
+- O teste `testeGeminiClassificadorWMGJ_V1()` agora só aprova quando `origem_classificacao` é `gemini`.
+- Resposta da IA passa por `JSON.parse` e `validarDocumentoJsonWMGJ_()` antes de ser aceita.
+- Mantido fallback local para preservar continuidade operacional quando a API estiver indisponível.
+- Erros e logs são sanitizados para impedir exposição acidental da chave.
+- O pipeline V3 não foi alterado.
+
+### Validação operacional
+
+Teste executado no Apps Script em 13/07/2026:
+
+```json
+{"ok":true,"origem":"gemini"}
+```
+
+Conclusão: autenticação, permissão, modelo e chamada `generateContent` foram confirmados no projeto Apps Script testado.
+
 ## v1.0.1-pipeline-estavel - 2026-05-18
 
 ### Consolidado
