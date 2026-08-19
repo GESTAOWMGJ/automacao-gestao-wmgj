@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   deploy-production:
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.VERCEL_AUTODEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: drjoaodefreitas-production
     defaults:
