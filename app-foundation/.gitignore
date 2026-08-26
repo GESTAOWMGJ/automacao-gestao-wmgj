@@ -10,3 +10,7 @@ ui-debug.log
 !.env.example
 coverage/
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
