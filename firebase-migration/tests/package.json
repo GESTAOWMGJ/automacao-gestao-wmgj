@@ -1,0 +1,10 @@
+{
+  "name": "wmgj-firestore-rule-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test firestore.rules.test.mjs" },
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^4.0.0",
+    "firebase": "^12.0.0"
+  }
+}
