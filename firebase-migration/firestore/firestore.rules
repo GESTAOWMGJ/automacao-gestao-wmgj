@@ -1,0 +1,172 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function memberPath(orgId) {
+      return /databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid);
+    }
+
+    function member(orgId) {
+      return signedIn() && exists(memberPath(orgId))
+        ? get(memberPath(orgId)).data
+        : null;
+    }
+
+    function activeMember(orgId) {
+      return signedIn()
+        && exists(memberPath(orgId))
+        && member(orgId).active == true;
+    }
+
+    function roleIn(orgId, roles) {
+      return activeMember(orgId) && member(orgId).role in roles;
+    }
+
+    function sameOrg(orgId) {
+      return request.resource.data.orgId == orgId;
+    }
+
+    function immutableOrg(orgId) {
+      return request.resource.data.orgId == orgId
+        && resource.data.orgId == orgId;
+    }
+
+    function actionCreateValid(orgId) {
+      return sameOrg(orgId)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.status in ['OPEN', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED']
+        && request.resource.data.riskLevel in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+        && request.resource.data.keys().hasAll([
+          'orgId', 'title', 'status', 'riskLevel', 'createdBy', 'createdAt', 'updatedAt'
+        ]);
+    }
+
+    function actionUpdateValid(orgId) {
+      return immutableOrg(orgId)
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'title', 'description', 'status', 'riskLevel', 'assigneeId',
+          'dueAt', 'resolution', 'evidenceRefs', 'updatedAt'
+        ]);
+    }
+
+    match /organizations/{orgId} {
+      allow read: if activeMember(orgId);
+      allow create, update, delete: if false;
+
+      match /members/{uid} {
+        allow read: if activeMember(orgId)
+          && (request.auth.uid == uid || roleIn(orgId, ['platform_admin', 'org_admin', 'auditor']));
+        allow write: if false;
+      }
+
+      match /facilities/{facilityId} {
+        allow read: if activeMember(orgId);
+        allow write: if false;
+      }
+
+      match /sourceDocuments/{documentId} {
+        allow read: if roleIn(orgId, [
+          'platform_admin', 'org_admin', 'director', 'auditor',
+          'medical_auditor', 'finance', 'operator', 'viewer'
+        ]);
+        allow write: if false;
+
+        match /versions/{versionId} {
+          allow read: if roleIn(orgId, [
+            'platform_admin', 'org_admin', 'director', 'auditor',
+            'medical_auditor', 'finance', 'operator'
+          ]);
+          allow write: if false;
+        }
+
+        match /events/{eventId} {
+          allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'director', 'auditor']);
+          allow write: if false;
+        }
+      }
+
+      match /{collection}/{documentId} {
+        allow read: if collection in [
+          'periods', 'professionals', 'shifts', 'productivityRecords',
+          'contracts', 'contractRules', 'invoices', 'bankTransactions',
+          'financialEntries', 'taxObligations', 'reconciliations',
+          'monthlyClosings', 'hospitalAccounts', 'authorizations',
+          'billingItems', 'glosses', 'appeals', 'opmeItems',
+          'qualityIndicators', 'auditFindings', 'runtimeCheckpoints'
+        ] && activeMember(orgId);
+        allow write: if false;
+      }
+
+      match /clinicalEvidence/{evidenceId} {
+        allow read: if roleIn(orgId, [
+          'platform_admin', 'org_admin', 'director', 'auditor', 'medical_auditor'
+        ]);
+        allow write: if false;
+      }
+
+      match /actionItems/{actionId} {
+        allow read: if activeMember(orgId);
+        allow create: if roleIn(orgId, [
+          'platform_admin', 'org_admin', 'director', 'auditor',
+          'medical_auditor', 'finance', 'operator'
+        ]) && actionCreateValid(orgId);
+        allow update: if roleIn(orgId, [
+          'platform_admin', 'org_admin', 'director', 'auditor',
+          'medical_auditor', 'finance', 'operator'
+        ]) && actionUpdateValid(orgId);
+        allow delete: if false;
+      }
+
+      match /approvals/{approvalId} {
+        allow read: if activeMember(orgId);
+        allow write: if false;
+      }
+
+      match /auditEvents/{eventId} {
+        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'director', 'auditor']);
+        allow write: if false;
+      }
+
+      match /aiRuns/{runId} {
+        allow read: if roleIn(orgId, [
+          'platform_admin', 'org_admin', 'director', 'auditor', 'medical_auditor'
+        ]);
+        allow write: if false;
+      }
+
+      match /integrationEvents/{eventId} {
+        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'auditor']);
+        allow write: if false;
+      }
+
+      match /workflowRuns/{runId} {
+        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'director', 'auditor', 'operator']);
+        allow write: if false;
+      }
+
+      match /runtimeLocks/{lockId} {
+        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'auditor', 'operator']);
+        allow write: if false;
+      }
+
+      match /deadLetters/{itemId} {
+        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'auditor', 'operator']);
+        allow write: if false;
+      }
+
+      match /{document=**} {
+        allow read, write: if false;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
