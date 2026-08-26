@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wmgj.example/schemas/ingestion-event.schema.json",
+  "title": "WMGJ Firestore Ingestion Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "eventId", "eventType", "orgId", "occurredAt",
+    "idempotencyKey", "entityType", "entityKey", "actor", "source",
+    "workflowState", "reviewState", "riskLevel", "sensitivity", "record"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "eventId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "eventType": { "enum": ["ENTITY_UPSERT", "DOCUMENT_UPSERT", "RUNTIME_CHECKPOINT", "AI_RUN_RECORDED"] },
+    "orgId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "entityType": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{1,63}$" },
+    "entityKey": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "actor": { "type": "object" },
+    "source": { "type": "object" },
+    "workflowState": { "enum": ["RECEIVED", "QUEUED", "CLASSIFIED", "EXTRACTED", "NORMALIZED", "PENDING_EVIDENCE", "PENDING_HUMAN_REVIEW", "BLOCKED", "VALIDATED", "CLOSED", "FAILED", "DEAD_LETTER"] },
+    "reviewState": { "enum": ["NOT_REQUIRED", "PENDING", "APPROVED", "REJECTED"] },
+    "riskLevel": { "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+    "sensitivity": { "enum": ["PUBLIC", "INTERNAL", "RESTRICTED", "CLINICAL_SENSITIVE"] },
+    "competence": { "type": "string", "pattern": "^$|^\\d{4}-(0[1-9]|1[0-2])$" },
+    "documentType": { "type": "string" },
+    "record": { "type": "object" },
+    "metadata": { "type": "object" }
+  }
+}
