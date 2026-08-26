@@ -87,6 +87,119 @@ svg {
   outline-offset: 3px;
 }
 
+.clinical-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  color: var(--red);
+  background: var(--red-soft);
+  border: 1px solid rgba(161, 76, 70, 0.25);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.gate-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  margin: 26px 0;
+  list-style: none;
+}
+
+.gate-card {
+  min-width: 0;
+  padding: 15px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line-soft);
+  border-top: 3px solid var(--blue);
+  border-radius: var(--radius-sm);
+}
+
+.gate-card--success { border-top-color: var(--green); }
+.gate-card--warning { border-top-color: var(--gold); }
+.gate-card--danger { border-top-color: var(--red); }
+
+.gate-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gate-card__head > strong {
+  color: var(--teal-800);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 23px;
+}
+
+.gate-card .state-pill {
+  align-items: flex-start;
+  white-space: normal;
+}
+
+.gate-card h3 {
+  margin: 15px 0 7px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.gate-card p,
+.gate-card span,
+.gate-card small {
+  display: block;
+  margin: 5px 0 0;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.gate-card small {
+  padding-top: 8px;
+  color: var(--red);
+  border-top: 1px solid var(--line-soft);
+}
+
+.traceability-table caption {
+  padding: 0 0 12px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-align: left;
+}
+
+.traceability-table code {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .gate-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .gate-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-lock {
+    align-self: flex-start;
+  }
+
+  .traceability-table td:nth-child(3),
+  .traceability-table th:nth-child(3),
+  .traceability-table td:nth-child(5),
+  .traceability-table th:nth-child(5) {
+    display: none;
+  }
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px !important;

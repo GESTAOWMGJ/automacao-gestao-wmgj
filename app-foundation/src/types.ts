@@ -104,3 +104,27 @@ export interface MockActionRequest {
   createdAt: string;
   state: "SOLICITADA";
 }
+
+export type ReadinessState =
+  | "CONCLUIDO_E_VERIFICADO"
+  | "PREPARADO_NAO_EXECUTADO"
+  | "PENDENTE_DE_APROVACAO"
+  | "BLOQUEADO";
+
+export interface ReadinessGate {
+  id: "G0" | "G1" | "G2" | "G3" | "G4";
+  label: string;
+  state: ReadinessState;
+  evidenceCount: number;
+  owner: string;
+  blockingReason?: string;
+}
+
+export interface TraceabilityControl {
+  requirement: string;
+  risk: string;
+  control: string;
+  test: string;
+  evidence: string;
+  state: ReadinessState;
+}

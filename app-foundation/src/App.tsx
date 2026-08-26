@@ -5,6 +5,8 @@ import {
   connectorStatuses,
   evidenceEvents,
   operationalStatus,
+  readinessGates,
+  traceabilityControls,
   validationTasks,
 } from "./demo-data";
 import type {
@@ -17,6 +19,7 @@ import type {
   OperationalAction,
   OverallStatus,
   PipelineMetrics,
+  ReadinessState,
   TaskPriority,
   ValidationStatus,
 } from "./types";
@@ -140,6 +143,13 @@ const resultLabels: Record<AuditResult, string> = {
   SOLICITADO: "Solicitado",
 };
 
+const readinessLabels: Record<ReadinessState, string> = {
+  CONCLUIDO_E_VERIFICADO: "Concluído e verificado",
+  PREPARADO_NAO_EXECUTADO: "Preparado, não executado",
+  PENDENTE_DE_APROVACAO: "Pendente de aprovação",
+  BLOQUEADO: "Bloqueado",
+};
+
 const priorityLabels: Record<TaskPriority, string> = {
   ALTA: "Alta",
   MEDIA: "Média",
@@ -186,6 +196,7 @@ const metricCards: Array<{
 const navigation = [
   { href: "#visao-geral", label: "Visão geral", icon: "grid" as IconName },
   { href: "#validacao", label: "Validação", icon: "review" as IconName },
+  { href: "#readiness", label: "Clinical readiness", icon: "shield" as IconName },
   { href: "#evidencias", label: "Evidências", icon: "layers" as IconName },
   { href: "#conectores", label: "Conectores", icon: "link" as IconName },
   { href: "#logs", label: "Logs", icon: "terminal" as IconName },
@@ -257,6 +268,13 @@ function priorityTone(priority: TaskPriority) {
   if (priority === "ALTA") return "danger" as const;
   if (priority === "MEDIA") return "warning" as const;
   return "neutral" as const;
+}
+
+function readinessTone(state: ReadinessState) {
+  if (state === "CONCLUIDO_E_VERIFICADO") return "success" as const;
+  if (state === "BLOQUEADO") return "danger" as const;
+  if (state === "PREPARADO_NAO_EXECUTADO") return "info" as const;
+  return "warning" as const;
 }
 
 function App() {
@@ -597,6 +615,62 @@ function App() {
                   <span>Ajuste a busca ou o filtro de status.</span>
                 </div>
               )}
+            </div>
+          </section>
+
+          <section className="panel readiness-panel" id="readiness" aria-labelledby="readiness-title">
+            <div className="panel__topline">
+              <SectionHeading
+                eyebrow="Clinical-readiness"
+                title="Prontidão sem ativação clínica"
+                description="Evidência técnica do PR draft. Uso clínico, comunicação ao paciente, deploy e migração real permanecem bloqueados."
+                icon="shield"
+                id="readiness-title"
+              />
+              <div className="clinical-lock"><Icon name="lock" size={16} /> Clinical use: OFF</div>
+            </div>
+
+            <ol className="gate-grid" aria-label="Gates de prontidão G0 a G4">
+              {readinessGates.map((gate) => (
+                <li className={`gate-card gate-card--${readinessTone(gate.state)}`} key={gate.id}>
+                  <div className="gate-card__head">
+                    <strong>{gate.id}</strong>
+                    <StatePill tone={readinessTone(gate.state)}>{readinessLabels[gate.state]}</StatePill>
+                  </div>
+                  <h3>{gate.label}</h3>
+                  <p>{gate.owner}</p>
+                  <span>{gate.evidenceCount} evidência{gate.evidenceCount === 1 ? "" : "s"}</span>
+                  {gate.blockingReason && <small>{gate.blockingReason}</small>}
+                </li>
+              ))}
+            </ol>
+
+            <div className="traceability-table table-wrap">
+              <table>
+                <caption>Rastreabilidade de requisito, risco, controle, teste e evidência</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Requisito</th>
+                    <th scope="col">Risco</th>
+                    <th scope="col">Controle</th>
+                    <th scope="col">Teste</th>
+                    <th scope="col">Evidência</th>
+                    <th scope="col">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {traceabilityControls.map((item) => (
+                    <tr key={item.requirement}>
+                      <td><code>{item.requirement}</code></td>
+                      <td>{item.risk}</td>
+                      <td>{item.control}</td>
+                      <td>{item.test}</td>
+                      <td><code>{item.evidence}</code></td>
+                      <td><StatePill tone={readinessTone(item.state)}>{readinessLabels[item.state]}</StatePill></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
 

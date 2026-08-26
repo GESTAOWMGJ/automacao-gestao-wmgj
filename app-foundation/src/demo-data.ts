@@ -4,6 +4,8 @@ import type {
   ConnectorStatus,
   EvidenceEvent,
   OperationalStatus,
+  ReadinessGate,
+  TraceabilityControl,
   ValidationTask,
 } from "./types";
 
@@ -229,5 +231,80 @@ export const actionDefinitions: ActionDefinition[] = [
     description: "Pede o encerramento do item, condicionado às validações do núcleo.",
     confirmation: "Confirmar o pedido de conclusão desta revisão?",
     tone: "primary",
+  },
+];
+
+export const readinessGates: ReadinessGate[] = [
+  {
+    id: "G0",
+    label: "Baseline e preservação",
+    state: "CONCLUIDO_E_VERIFICADO",
+    evidenceCount: 4,
+    owner: "Engenharia",
+  },
+  {
+    id: "G1",
+    label: "Controles críticos",
+    state: "PREPARADO_NAO_EXECUTADO",
+    evidenceCount: 2,
+    owner: "Back-end + segurança",
+  },
+  {
+    id: "G2",
+    label: "Fronteira clínica",
+    state: "PREPARADO_NAO_EXECUTADO",
+    evidenceCount: 2,
+    owner: "Responsável clínico",
+  },
+  {
+    id: "G3",
+    label: "CI, contratos e algoritmo",
+    state: "PENDENTE_DE_APROVACAO",
+    evidenceCount: 1,
+    owner: "Revisores independentes",
+    blockingReason: "Nova execução de CI e aprovações formais ainda necessárias.",
+  },
+  {
+    id: "G4",
+    label: "Migração em dry-run",
+    state: "PENDENTE_DE_APROVACAO",
+    evidenceCount: 1,
+    owner: "Produção + migração",
+    blockingReason: "Somente fixtures sintéticas; nenhuma fonte real autorizada.",
+  },
+];
+
+export const traceabilityControls: TraceabilityControl[] = [
+  {
+    requirement: "CR-001",
+    risk: "Liberação clínica acidental",
+    control: "Feature flag desligada e fail-closed",
+    test: "API não expõe rota clínica mutável",
+    evidence: "api/tests/test_readiness.py",
+    state: "CONCLUIDO_E_VERIFICADO",
+  },
+  {
+    requirement: "PRV-002",
+    risk: "Uso de dado real em teste",
+    control: "Origem sintética determinística",
+    test: "Contrato exige SYNTHETIC_DETERMINISTIC",
+    evidence: "GET /v1/readiness",
+    state: "CONCLUIDO_E_VERIFICADO",
+  },
+  {
+    requirement: "DEP-003",
+    risk: "Deploy ou migração involuntária",
+    control: "Workflow manual com duplo bloqueio",
+    test: "dry_run=true e variáveis desabilitadas",
+    evidence: ".github/workflows/deploy-production.yml",
+    state: "PREPARADO_NAO_EXECUTADO",
+  },
+  {
+    requirement: "VAL-004",
+    risk: "Confundir teste técnico com validação clínica",
+    control: "Gate clínico independente",
+    test: "Aprovação médica permanece obrigatória",
+    evidence: "docs/governance/required-approvals.md",
+    state: "PENDENTE_DE_APROVACAO",
   },
 ];
