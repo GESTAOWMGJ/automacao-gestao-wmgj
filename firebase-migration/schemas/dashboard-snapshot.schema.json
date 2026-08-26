@@ -1,0 +1,495 @@
+{
+  "$defs": {
+    "AuditMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "criticalFindings": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Criticalfindings"
+        },
+        "evidenceGaps": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Evidencegaps"
+        },
+        "openFindings": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Openfindings"
+        },
+        "overdueActions": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Overdueactions"
+        }
+      },
+      "title": "AuditMetrics",
+      "type": "object"
+    },
+    "CompletenessState": {
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "EMPTY",
+        "INVALID"
+      ],
+      "title": "CompletenessState",
+      "type": "string"
+    },
+    "DashboardAlert": {
+      "additionalProperties": false,
+      "properties": {
+        "alertId": {
+          "title": "Alertid",
+          "type": "string"
+        },
+        "createdAt": {
+          "format": "date-time",
+          "title": "Createdat",
+          "type": "string"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        },
+        "evidenceRefs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidencerefs",
+          "type": "array"
+        },
+        "severity": {
+          "$ref": "#/$defs/RiskLevel"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "alertId",
+        "severity",
+        "title",
+        "detail",
+        "createdAt"
+      ],
+      "title": "DashboardAlert",
+      "type": "object"
+    },
+    "FinancialMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "billedAmount": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Billedamount"
+        },
+        "currency": {
+          "const": "BRL",
+          "default": "BRL",
+          "title": "Currency",
+          "type": "string"
+        },
+        "pendingAmount": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pendingamount"
+        },
+        "receivedAmount": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Receivedamount"
+        },
+        "reconciliationDifference": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reconciliationdifference"
+        }
+      },
+      "title": "FinancialMetrics",
+      "type": "object"
+    },
+    "FreshnessState": {
+      "enum": [
+        "FRESH",
+        "DELAYED",
+        "STALE",
+        "UNKNOWN"
+      ],
+      "title": "FreshnessState",
+      "type": "string"
+    },
+    "OperationalSeverity": {
+      "enum": [
+        "NOMINAL",
+        "ATTENTION",
+        "BLOCKED",
+        "UNKNOWN"
+      ],
+      "title": "OperationalSeverity",
+      "type": "string"
+    },
+    "PipelineMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "deadLetter": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deadletter"
+        },
+        "duplicateEvents": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duplicateevents"
+        },
+        "failed": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failed"
+        },
+        "pendingHumanReview": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pendinghumanreview"
+        },
+        "processing": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Processing"
+        },
+        "queued": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queued"
+        },
+        "total": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total"
+        },
+        "validated": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Validated"
+        }
+      },
+      "title": "PipelineMetrics",
+      "type": "object"
+    },
+    "RiskLevel": {
+      "enum": [
+        "LOW",
+        "MEDIUM",
+        "HIGH",
+        "CRITICAL"
+      ],
+      "title": "RiskLevel",
+      "type": "string"
+    },
+    "SourceState": {
+      "additionalProperties": false,
+      "properties": {
+        "completeness": {
+          "$ref": "#/$defs/CompletenessState"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "expectedCadenceSeconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expectedcadenceseconds"
+        },
+        "freshness": {
+          "$ref": "#/$defs/FreshnessState",
+          "default": "UNKNOWN"
+        },
+        "lastSuccessAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lastsuccessat"
+        },
+        "missing": {
+          "default": false,
+          "title": "Missing",
+          "type": "boolean"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "staleAfterSeconds": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Staleafterseconds"
+        }
+      },
+      "required": [
+        "source",
+        "completeness"
+      ],
+      "title": "SourceState",
+      "type": "object"
+    }
+  },
+  "$id": "https://wmgj.example/schemas/dashboard-snapshot.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "alerts": {
+      "items": {
+        "$ref": "#/$defs/DashboardAlert"
+      },
+      "maxItems": 50,
+      "title": "Alerts",
+      "type": "array"
+    },
+    "asOf": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Asof"
+    },
+    "audit": {
+      "$ref": "#/$defs/AuditMetrics"
+    },
+    "competence": {
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])$",
+      "title": "Competence",
+      "type": "string"
+    },
+    "completeness": {
+      "$ref": "#/$defs/CompletenessState"
+    },
+    "facilityId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Facilityid"
+    },
+    "financial": {
+      "$ref": "#/$defs/FinancialMetrics"
+    },
+    "generatedAt": {
+      "format": "date-time",
+      "title": "Generatedat",
+      "type": "string"
+    },
+    "orgId": {
+      "title": "Orgid",
+      "type": "string"
+    },
+    "pipeline": {
+      "$ref": "#/$defs/PipelineMetrics"
+    },
+    "policyVersion": {
+      "title": "Policyversion",
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "severity": {
+      "$ref": "#/$defs/OperationalSeverity"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/SourceState"
+      },
+      "title": "Sources",
+      "type": "array"
+    }
+  },
+  "required": [
+    "orgId",
+    "competence",
+    "generatedAt",
+    "policyVersion",
+    "completeness",
+    "severity",
+    "pipeline",
+    "financial",
+    "audit",
+    "sources"
+  ],
+  "title": "DashboardSnapshot",
+  "type": "object"
+}

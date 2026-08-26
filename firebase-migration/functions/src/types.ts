@@ -57,6 +57,7 @@ export interface WmgjIngestionEvent {
   eventType: EventType;
   orgId: string;
   occurredAt: string;
+  sourceVersion: number;
   idempotencyKey: string;
   entityType: string;
   entityKey: string;

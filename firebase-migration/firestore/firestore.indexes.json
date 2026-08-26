@@ -18,12 +18,40 @@
       ]
     },
     {
+      "collectionGroup": "sourceDocuments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "facilityId", "order": "ASCENDING" },
+        { "fieldPath": "workflowState", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "actionItems",
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "riskLevel", "order": "DESCENDING" },
         { "fieldPath": "dueAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "actionItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "facilityId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "riskLevel", "order": "DESCENDING" },
+        { "fieldPath": "dueAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "dashboardSnapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sanitized", "order": "ASCENDING" },
+        { "fieldPath": "facilityId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
       ]
     },
     {

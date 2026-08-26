@@ -16,7 +16,7 @@
 
 ### P0 — segurança e integridade
 
-1. **Endpoint atual:** token estático no payload. Substituir por HMAC com timestamp, proteção contra replay e segredo fora do código.
+1. **Endpoint legado:** token estático no payload. A fundação Firestore agora usa HMAC v2 sobre body e escopo, `keyId` rotacionável, timestamp, nonce transacional e segredo fora do código; o endpoint legado ainda deve ser aposentado somente após homologação.
 2. **Hash atual:** usa ID, nome, tamanho e data. Acrescentar hash do conteúdo; manter fallback somente quando o blob não puder ser lido.
 3. **Deploy:** o workflow de deploy executa rotinas operacionais, atualiza dashboard, roda ciclos Gmail e instala gatilhos. Separar `deploy-code`, `validate-readonly` e `operate-production`.
 4. **Fonte do código:** definir `src/` como árvore única; arquivar `apps-script/` e `appsscript/` após comparação.

@@ -1,11 +1,21 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
-import { defineSecret, defineString } from "firebase-functions/params";
+import { defineSecret } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
+import {
+  decideIdempotency,
+  decideSourceVersion,
+  semanticEventForIdempotency
+} from "./idempotency.js";
+import { collectionFor, keyAllowsEntityType } from "./policy.js";
+import {
+  sha256Hex,
+  verifyHmacV2,
+  type HmacV2Headers
+} from "./security.js";
 import { validateEvent } from "./validation.js";
 
 initializeApp();
@@ -17,38 +27,17 @@ setGlobalOptions({
 });
 
 const db = getFirestore();
-const HMAC_SECRET = defineSecret("WMGJ_INGEST_HMAC_SECRET");
-const ALLOWED_ORGS = defineString("WMGJ_ALLOWED_ORGS", { default: "wmgj" });
-const CLOCK_SKEW_SECONDS = 300;
+const HMAC_KEYRING = defineSecret("WMGJ_INGEST_HMAC_KEYRING");
+const NONCE_TTL_MILLISECONDS = 15 * 60 * 1000;
 
-const ENTITY_COLLECTIONS: Record<string, string> = {
-  sourceDocument: "sourceDocuments",
-  runtimeCheckpoint: "runtimeCheckpoints",
-  professional: "professionals",
-  shift: "shifts",
-  productivityRecord: "productivityRecords",
-  contract: "contracts",
-  contractRule: "contractRules",
-  invoice: "invoices",
-  bankTransaction: "bankTransactions",
-  financialEntry: "financialEntries",
-  taxObligation: "taxObligations",
-  reconciliation: "reconciliations",
-  monthlyClosing: "monthlyClosings",
-  actionItem: "actionItems",
-  hospitalAccount: "hospitalAccounts",
-  authorization: "authorizations",
-  billingItem: "billingItems",
-  gloss: "glosses",
-  appeal: "appeals",
-  opmeItem: "opmeItems",
-  qualityIndicator: "qualityIndicators",
-  auditFinding: "auditFindings",
-  aiRun: "aiRuns"
-};
-
-function sha256(value: string | Buffer): string {
-  return createHash("sha256").update(value).digest("hex");
+class IngestDomainError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string
+  ) {
+    super(code);
+    this.name = "IngestDomainError";
+  }
 }
 
 function stableValue(value: unknown): unknown {
@@ -57,7 +46,9 @@ function stableValue(value: unknown): unknown {
     if (value instanceof Timestamp) return value.toDate().toISOString();
     const record = value as Record<string, unknown>;
     return Object.keys(record).sort().reduce<Record<string, unknown>>((acc, key) => {
-      if (!["createdAt", "updatedAt", "serverAt"].includes(key)) acc[key] = stableValue(record[key]);
+      if (!["createdAt", "updatedAt", "serverAt", "importedAt"].includes(key)) {
+        acc[key] = stableValue(record[key]);
+      }
       return acc;
     }, {});
   }
@@ -68,62 +59,57 @@ function stableJson(value: unknown): string {
   return JSON.stringify(stableValue(value));
 }
 
-function constantTimeHexEquals(expectedHex: string, receivedHex: string): boolean {
-  if (!/^[a-f0-9]{64}$/i.test(receivedHex)) return false;
-  const expected = Buffer.from(expectedHex, "hex");
-  const received = Buffer.from(receivedHex, "hex");
-  return expected.length === received.length && timingSafeEqual(expected, received);
-}
-
-function verifySignature(rawBody: Buffer, timestampHeader: string, signature: string, secret: string): boolean {
-  const timestamp = Number(timestampHeader);
-  if (!Number.isFinite(timestamp)) return false;
-  const ageSeconds = Math.abs(Date.now() / 1000 - timestamp);
-  if (ageSeconds > CLOCK_SKEW_SECONDS) return false;
-  const signed = `${timestampHeader}.${rawBody.toString("utf8")}`;
-  const expected = createHmac("sha256", secret).update(signed).digest("hex");
-  return constantTimeHexEquals(expected, signature);
-}
-
-function allowedOrg(orgId: string): boolean {
-  return ALLOWED_ORGS.value().split(",").map((v) => v.trim()).filter(Boolean).includes(orgId);
-}
-
-function collectionFor(entityType: string): string {
-  const collection = ENTITY_COLLECTIONS[entityType];
-  if (!collection) throw new Error(`ENTITY_TYPE_NOT_ALLOWED:${entityType}`);
-  return collection;
-}
-
 function deterministicId(entityType: string, entityKey: string): string {
-  return sha256(`${entityType}:${entityKey}`).slice(0, 48);
+  return sha256Hex(`${entityType}:${entityKey}`).slice(0, 48);
 }
 
-function publicError(error: unknown): string {
+function safeLogError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message.replace(/[\r\n]/g, " ").slice(0, 300);
 }
 
 export const ingestWmgjEvent = onRequest(
-  { secrets: [HMAC_SECRET], cors: false },
+  { secrets: [HMAC_KEYRING], cors: false },
   async (req, res) => {
     if (req.method !== "POST") {
+      res.set("Allow", "POST");
       res.status(405).json({ ok: false, code: "METHOD_NOT_ALLOWED" });
+      return;
+    }
+
+    const contentType = String(req.get("content-type") || "");
+    if (contentType.split(";", 1)[0]?.trim().toLowerCase() !== "application/json") {
+      res.status(415).json({ ok: false, code: "UNSUPPORTED_MEDIA_TYPE" });
       return;
     }
 
     const rawBody = Buffer.isBuffer(req.rawBody)
       ? req.rawBody
       : Buffer.from(JSON.stringify(req.body ?? {}), "utf8");
-    const timestamp = String(req.get("x-wmgj-timestamp") || "");
-    const signature = String(req.get("x-wmgj-signature") || "");
-    const orgHeader = String(req.get("x-wmgj-org-id") || "");
-    const idemHeader = String(req.get("x-wmgj-idempotency-key") || "");
-    const secret = HMAC_SECRET.value();
+    const authHeaders: HmacV2Headers = {
+      signatureVersion: String(req.get("x-wmgj-signature-version") || ""),
+      timestamp: String(req.get("x-wmgj-timestamp") || ""),
+      nonce: String(req.get("x-wmgj-nonce") || ""),
+      keyId: String(req.get("x-wmgj-key-id") || ""),
+      orgId: String(req.get("x-wmgj-org-id") || ""),
+      idempotencyKey: String(req.get("x-wmgj-idempotency-key") || ""),
+      signature: String(req.get("x-wmgj-signature") || ""),
+      method: req.method,
+      contentType
+    };
 
-    if (secret.length < 32 || !verifySignature(rawBody, timestamp, signature, secret)) {
-      logger.warn("WMGJ ingest rejected", { code: "INVALID_SIGNATURE", orgHeader });
-      res.status(401).json({ ok: false, code: "INVALID_SIGNATURE" });
+    const verification = verifyHmacV2(rawBody, authHeaders, HMAC_KEYRING.value());
+    if (!verification.ok) {
+      const configurationFailure = verification.code === "KEYRING_INVALID";
+      logger.warn("WMGJ ingest authentication rejected", {
+        code: verification.code,
+        keyId: authHeaders.keyId,
+        orgId: authHeaders.orgId
+      });
+      res.status(configurationFailure ? 503 : 401).json({
+        ok: false,
+        code: configurationFailure ? "SECURITY_CONFIGURATION_ERROR" : "INVALID_SIGNATURE"
+      });
       return;
     }
 
@@ -137,42 +123,98 @@ export const ingestWmgjEvent = onRequest(
 
     const validation = validateEvent(input, rawBody.byteLength);
     if (!validation.ok || !validation.event) {
+      logger.warn("WMGJ ingest validation rejected", {
+        code: "VALIDATION_ERROR",
+        keyId: authHeaders.keyId,
+        orgId: authHeaders.orgId,
+        errors: validation.errors
+      });
       res.status(400).json({ ok: false, code: "VALIDATION_ERROR", errors: validation.errors });
       return;
     }
 
     const event = validation.event;
-    if (!allowedOrg(event.orgId) || event.orgId !== orgHeader || event.idempotencyKey !== idemHeader) {
-      res.status(403).json({ ok: false, code: "ORG_OR_IDEMPOTENCY_MISMATCH" });
+    if (event.orgId !== authHeaders.orgId || event.idempotencyKey !== authHeaders.idempotencyKey) {
+      res.status(403).json({ ok: false, code: "SIGNED_HEADER_BODY_MISMATCH" });
+      return;
+    }
+    if (!keyAllowsEntityType(verification.principal.entityTypes, event.entityType)) {
+      res.status(403).json({ ok: false, code: "KEY_SCOPE_VIOLATION" });
       return;
     }
 
     try {
       const collection = collectionFor(event.entityType);
+      if (!collection) throw new IngestDomainError(400, "ENTITY_TYPE_NOT_ALLOWED");
+
       const entityId = deterministicId(event.entityType, event.entityKey);
-      const idempotencyId = sha256(event.idempotencyKey);
+      // eventId e occurredAt identificam a tentativa, não a operação lógica.
+      // Excluí-los permite replay seguro em um novo ciclo sem aceitar mudança
+      // nos campos semânticos cobertos pela mesma Idempotency-Key.
+      const payloadHash = sha256Hex(stableJson(
+        semanticEventForIdempotency(event as unknown as Record<string, unknown>)
+      ));
+      const idempotencyId = sha256Hex(event.idempotencyKey);
+      const nonceId = sha256Hex(`${authHeaders.keyId}:${authHeaders.nonce}`);
       const orgRef = db.doc(`organizations/${event.orgId}`);
       const idemRef = orgRef.collection("integrationEvents").doc(idempotencyId);
+      const nonceRef = orgRef.collection("requestNonces").doc(nonceId);
       const entityRef = orgRef.collection(collection).doc(entityId);
-      const auditRef = orgRef.collection("auditEvents").doc();
+      const auditRef = orgRef.collection("auditEvents").doc(idempotencyId);
       const checkpointRef = orgRef.collection("runtimeCheckpoints").doc("ingestion");
 
       const result = await db.runTransaction(async (tx) => {
         const orgSnap = await tx.get(orgRef);
+        const nonceSnap = await tx.get(nonceRef);
         const idemSnap = await tx.get(idemRef);
         const entitySnap = await tx.get(entityRef);
 
-        if (!orgSnap.exists) throw new Error("ORGANIZATION_NOT_BOOTSTRAPPED");
-        if (idemSnap.exists) return { duplicate: true, entityId };
+        if (!orgSnap.exists) throw new IngestDomainError(412, "ORGANIZATION_NOT_BOOTSTRAPPED");
+        if (nonceSnap.exists) throw new IngestDomainError(409, "REPLAY_DETECTED");
+
+        const idempotency = decideIdempotency(
+          idemSnap.exists ? idemSnap.data() : null,
+          payloadHash
+        );
+        if (idempotency.kind === "CONFLICT") {
+          throw new IngestDomainError(409, "IDEMPOTENCY_CONFLICT");
+        }
+
+        tx.create(nonceRef, {
+          orgId: event.orgId,
+          keyId: authHeaders.keyId,
+          nonceHash: nonceId,
+          acceptedAt: FieldValue.serverTimestamp(),
+          expiresAt: Timestamp.fromMillis(Date.now() + NONCE_TTL_MILLISECONDS)
+        });
+
+        if (idempotency.kind === "DUPLICATE") {
+          return {
+            duplicate: true,
+            entityId: idempotency.entityId || entityId,
+            eventId: idempotency.eventId || event.eventId
+          };
+        }
 
         const previous = entitySnap.exists ? entitySnap.data() : null;
+        const sourceVersionDecision = decideSourceVersion(
+          previous?.sourceVersion,
+          event.sourceVersion
+        );
+        if (sourceVersionDecision === "REGRESSION") {
+          throw new IngestDomainError(409, "SOURCE_VERSION_REGRESSION");
+        }
+        if (sourceVersionDecision === "CONFLICT") {
+          throw new IngestDomainError(409, "SOURCE_VERSION_CONFLICT");
+        }
         const occurredAt = Timestamp.fromDate(new Date(event.occurredAt));
-        const normalized = {
+        const hashableAfter = {
           ...event.record,
           orgId: event.orgId,
           schemaVersion: 1,
           entityType: event.entityType,
           entityKey: event.entityKey,
+          sourceVersion: event.sourceVersion,
           competence: event.competence ?? null,
           documentType: event.documentType ?? null,
           workflowState: event.workflowState,
@@ -183,15 +225,23 @@ export const ingestWmgjEvent = onRequest(
           migration: {
             eventId: event.eventId,
             idempotencyId,
-            sourceSystem: event.source.system,
+            sourceSystem: event.source.system
+          }
+        };
+        const normalized = {
+          ...hashableAfter,
+          migration: {
+            ...hashableAfter.migration,
             importedAt: FieldValue.serverTimestamp()
           },
-          createdAt: entitySnap.exists ? previous?.createdAt ?? FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
+          createdAt: entitySnap.exists
+            ? previous?.createdAt ?? FieldValue.serverTimestamp()
+            : FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp()
         };
 
-        const beforeHash = previous ? sha256(stableJson(previous)) : null;
-        const afterHash = sha256(stableJson({ ...event.record, workflowState: event.workflowState }));
+        const beforeHash = previous ? sha256Hex(stableJson(previous)) : null;
+        const afterHash = sha256Hex(stableJson(hashableAfter));
 
         tx.set(entityRef, normalized, { merge: true });
         tx.create(idemRef, {
@@ -200,9 +250,11 @@ export const ingestWmgjEvent = onRequest(
           eventType: event.eventType,
           entityType: event.entityType,
           entityId,
+          authenticatedKeyId: authHeaders.keyId,
+          sourceVersion: event.sourceVersion,
           sourceSystem: event.source.system,
           sourceId: event.source.sourceId,
-          payloadHash: sha256(rawBody),
+          payloadHash,
           occurredAt,
           acceptedAt: FieldValue.serverTimestamp(),
           status: "ACCEPTED"
@@ -214,6 +266,8 @@ export const ingestWmgjEvent = onRequest(
           entityId,
           eventId: event.eventId,
           idempotencyId,
+          authenticatedKeyId: authHeaders.keyId,
+          sourceVersion: event.sourceVersion,
           actor: event.actor,
           source: event.source,
           beforeHash,
@@ -233,7 +287,7 @@ export const ingestWmgjEvent = onRequest(
           updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
 
-        return { duplicate: false, entityId };
+        return { duplicate: false, entityId, eventId: event.eventId };
       });
 
       res.status(result.duplicate ? 200 : 202).json({
@@ -241,15 +295,27 @@ export const ingestWmgjEvent = onRequest(
         accepted: !result.duplicate,
         duplicate: result.duplicate,
         entityId: result.entityId,
-        eventId: event.eventId
+        eventId: result.eventId
       });
     } catch (error) {
+      if (error instanceof IngestDomainError) {
+        logger.warn("WMGJ ingest domain rejected", {
+          code: error.code,
+          eventId: event.eventId,
+          entityType: event.entityType,
+          orgId: event.orgId,
+          keyId: authHeaders.keyId,
+          idempotencyId: sha256Hex(event.idempotencyKey)
+        });
+        res.status(error.status).json({ ok: false, code: error.code });
+        return;
+      }
       logger.error("WMGJ ingest failed", {
         eventId: event.eventId,
         entityType: event.entityType,
-        error: publicError(error)
+        error: safeLogError(error)
       });
-      res.status(500).json({ ok: false, code: "INGEST_FAILED", error: publicError(error) });
+      res.status(500).json({ ok: false, code: "INGEST_FAILED" });
     }
   }
 );
@@ -284,6 +350,7 @@ export const runtimeHealth = onRequest({ cors: false }, async (_req, res) => {
     ok: true,
     service: "wmgj-firestore-ingestion",
     schemaVersion: 1,
+    signatureVersion: "v2",
     time: new Date().toISOString()
   });
 });

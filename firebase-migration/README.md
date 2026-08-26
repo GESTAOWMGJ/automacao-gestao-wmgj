@@ -12,7 +12,7 @@ A planilha-mestre, o Gmail, o Drive e o Apps Script permanecem como sistema-font
 Gmail / Drive / Sheets
         ↓
 Apps Script atual (adaptador temporário)
-        ↓ HTTPS + HMAC + idempotency key
+        ↓ HTTPS + HMAC v2/keyId + nonce + idempotency key
 Cloud Function v2 / API de ingestão
         ↓
 Cloud Firestore
@@ -21,6 +21,14 @@ Cloud Firestore
   ├─ runtime / fila / watchdog
   ├─ financeiro e conciliação
   └─ módulos hospitalares replicáveis
+
+Usuário autenticado
+        ↓ Firebase ID Token + App Check
+FastAPI Control Plane (homologação)
+  ├─ snapshots sanitizados
+  ├─ OpenAI Responses API tipada
+  ├─ revisão humana com revision lock
+  └─ auditoria servidor-only
 ```
 
 ## Regras inegociáveis
@@ -38,30 +46,38 @@ Cloud Firestore
 - `docs/`: inventário, arquitetura, mapeamento, plano de migração, auditoria runtime, segurança e dicionário.
 - `firestore/`: regras e índices.
 - `functions/`: API TypeScript de ingestão assinada e watchdog.
+- `api/`: BFF FastAPI para dashboard, IA auditável e revisão humana.
 - `apps-script/`: ponte segura e migrador incremental por checkpoint.
 - `migration/`: mapa das abas e critérios de reconciliação.
 - `schemas/`: contratos JSON canônicos.
 - `tests/`: testes mínimos das Security Rules.
+- `api/evals/`: casos sintéticos de regressão; live eval é opt-in.
 - `skills/`: habilidade operacional aprendida para continuidade.
 
-## Implantação controlada
+## Validação controlada
 
 ```bash
-cd functions
-npm ci
-npm run build
-cd ..
-
-firebase use --add
-firebase functions:secrets:set WMGJ_INGEST_HMAC_SECRET
-firebase emulators:exec --only firestore,functions,auth "npm --prefix tests test"
-firebase deploy --only firestore:rules,firestore:indexes,functions
+bash scripts/bootstrap-homologacao.sh
 ```
+
+O script exige Node 22 e Java 21+, usa lockfiles, compila as Functions e executa as Security Rules no Emulator Suite. Ele não faz login, configura segredo nem executa deploy. O workflow deste PR repete apenas essas validações.
+
+A camada FastAPI é implantada separadamente e somente em homologação. O PR não inclui auto-deploy:
+
+```bash
+cd api
+uv sync --dev
+uv run pytest
+uv run fastapi cloud deploy --help
+```
+
+`OPENAI_API_KEY` permanece exclusivamente como secret do backend. `CLINICAL_SENSITIVE` fica bloqueado até validação contratual, retenção, IAM, LGPD e aprovação clínica formal.
 
 No Apps Script, configure somente em **Script Properties**:
 
 ```text
 WMGJ_FIRESTORE_INGEST_URL=https://<regiao>-<projeto>.cloudfunctions.net/ingestWmgjEvent
+WMGJ_FIRESTORE_HMAC_KEY_ID=apps-script-homolog-2026-08
 WMGJ_FIRESTORE_HMAC_SECRET=<segredo longo e exclusivo>
 WMGJ_FIRESTORE_ORG_ID=wmgj
 WMGJ_FIRESTORE_DRY_RUN=true
@@ -76,6 +92,10 @@ wmgjFirestoreMigracaoDryRun(10);
 ```
 
 A virada para `WMGJ_FIRESTORE_DRY_RUN=false` só deve ocorrer no ambiente de homologação, depois dos testes das regras, da criação da organização `wmgj` e da validação dos totais.
+
+O backend recebe `WMGJ_INGEST_HMAC_KEYRING` como secret JSON rotacionável. Cada entrada contém `active`, `secret`, `orgIds` e `entityTypes`; o `keyId` do Apps Script deve apontar para uma entrada ativa e escopada. Antes da homologação, habilite também a política TTL do Firestore para `requestNonces.expiresAt`.
+
+O primeiro backfill de Sheets usa `sourceVersion=1` como fotografia congelada. Qualquer alteração posterior da mesma entidade falha fechada; dual-write só pode começar depois que a fonte tiver uma coluna ou versionador monotônico durável por registro.
 
 ## Critério de cutover
 

@@ -6,10 +6,12 @@ import {
   type ValidationResult,
   type WmgjIngestionEvent
 } from "./types.js";
+import { isAllowedEntityType, validateGenericIngestionPolicy } from "./policy.js";
 
 const ORG_ID = /^[a-z0-9][a-z0-9_-]{1,63}$/;
 const SAFE_ENTITY = /^[A-Za-z][A-Za-z0-9_]{1,63}$/;
 const ISO_COMPETENCE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 const MAX_BODY_BYTES = 900_000;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -45,6 +47,18 @@ function cleanObject(value: unknown, depth = 0): Record<string, unknown> {
   return output;
 }
 
+function containsNestedArray(value: unknown, insideArray = false, depth = 0): boolean {
+  if (depth > 10) return true;
+  if (Array.isArray(value)) {
+    if (insideArray) return true;
+    return value.some((item) => containsNestedArray(item, true, depth + 1));
+  }
+  if (isObject(value)) {
+    return Object.values(value).some((item) => containsNestedArray(item, false, depth + 1));
+  }
+  return false;
+}
+
 export function validateEvent(input: unknown, rawBytes: number): ValidationResult {
   const errors: string[] = [];
   if (rawBytes > MAX_BODY_BYTES) errors.push("payload acima do limite permitido");
@@ -53,6 +67,7 @@ export function validateEvent(input: unknown, rawBytes: number): ValidationResul
   const eventId = requiredString(input.eventId, "eventId", errors, 128);
   const orgId = requiredString(input.orgId, "orgId", errors, 64);
   const occurredAt = requiredString(input.occurredAt, "occurredAt", errors, 64);
+  const sourceVersion = input.sourceVersion;
   const idempotencyKey = requiredString(input.idempotencyKey, "idempotencyKey", errors, 512);
   const entityType = requiredString(input.entityType, "entityType", errors, 64);
   const entityKey = requiredString(input.entityKey, "entityKey", errors, 512);
@@ -60,7 +75,13 @@ export function validateEvent(input: unknown, rawBytes: number): ValidationResul
   if (input.schemaVersion !== 1) errors.push("schemaVersion deve ser 1");
   if (!ORG_ID.test(orgId)) errors.push("orgId fora do padrão seguro");
   if (!SAFE_ENTITY.test(entityType)) errors.push("entityType fora do padrão seguro");
-  if (Number.isNaN(Date.parse(occurredAt))) errors.push("occurredAt não é data ISO válida");
+  if (entityType && !isAllowedEntityType(entityType)) errors.push("entityType não permitido");
+  if (!ISO_DATE_TIME.test(occurredAt) || Number.isNaN(Date.parse(occurredAt))) {
+    errors.push("occurredAt não é data ISO válida");
+  }
+  if (!Number.isSafeInteger(sourceVersion) || Number(sourceVersion) < 1) {
+    errors.push("sourceVersion deve ser inteiro positivo seguro");
+  }
   if (!EVENT_TYPES.includes(input.eventType as never)) errors.push("eventType inválido");
   if (!WORKFLOW_STATES.includes(input.workflowState as never)) errors.push("workflowState inválido");
   if (!REVIEW_STATES.includes(input.reviewState as never)) errors.push("reviewState inválido");
@@ -76,6 +97,9 @@ export function validateEvent(input: unknown, rawBytes: number): ValidationResul
   if (!isObject(input.actor)) errors.push("actor inválido");
   if (!isObject(input.source)) errors.push("source inválido");
   if (!isObject(input.record)) errors.push("record inválido");
+  if (containsNestedArray(input.record) || containsNestedArray(input.metadata)) {
+    errors.push("arrays aninhados não são compatíveis com o Firestore");
+  }
 
   const actor = isObject(input.actor) ? input.actor : {};
   const source = isObject(input.source) ? input.source : {};
@@ -95,6 +119,7 @@ export function validateEvent(input: unknown, rawBytes: number): ValidationResul
     eventType: input.eventType as WmgjIngestionEvent["eventType"],
     orgId,
     occurredAt,
+    sourceVersion: Number(sourceVersion),
     idempotencyKey,
     entityType,
     entityKey,
@@ -113,6 +138,9 @@ export function validateEvent(input: unknown, rawBytes: number): ValidationResul
     record: cleanObject(input.record),
     metadata: cleanObject(input.metadata)
   };
+
+  const policyErrors = validateGenericIngestionPolicy(event);
+  if (policyErrors.length > 0) return { ok: false, errors: policyErrors };
 
   return { ok: true, errors: [], event };
 }

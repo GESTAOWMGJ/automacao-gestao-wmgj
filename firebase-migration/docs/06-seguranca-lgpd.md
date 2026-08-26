@@ -17,6 +17,10 @@
 6. Toda exportação e compartilhamento precisam de finalidade, responsável e trilha.
 7. Definir retenção por categoria e obrigação legal/contratual; não apagar por conveniência técnica.
 8. Preparar plano de resposta a incidente e registro de operações de tratamento.
+9. Exigir App Check nas rotas FastAPI autenticadas e MFA para decisões humanas.
+10. Negar projeção sem `facilityId` a membros limitados; agregado organizacional exige `allFacilities=true`.
+11. A ingestão genérica rejeita `CLINICAL_SENSITIVE`, aprovação/rejeição e fechamento crítico.
+12. Ativar TTL em `requestNonces.expiresAt` antes da homologação do endpoint HMAC.
 
 ## Papéis iniciais
 

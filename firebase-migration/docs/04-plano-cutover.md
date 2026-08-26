@@ -31,6 +31,7 @@
 
 ## Fase 4 — dual write
 
+- Exigir coluna ou versionador monotônico durável por registro; `sourceVersion=1` vale apenas para a fotografia inicial congelada.
 - Apps Script continua gravando a planilha.
 - Ponte espelha fatos aceitos para Firestore de forma não bloqueante.
 - Firestore não devolve escrita à planilha nesta fase.

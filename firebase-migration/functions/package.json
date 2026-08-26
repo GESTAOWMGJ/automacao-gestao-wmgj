@@ -8,6 +8,7 @@
   "scripts": {
     "build": "tsc",
     "lint": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
     "serve": "npm run build && firebase emulators:start --only functions,firestore,auth",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "typescript": "^5.8.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0"
   }
 }

@@ -23,46 +23,121 @@ service cloud.firestore {
     }
 
     function roleIn(orgId, roles) {
-      return activeMember(orgId) && member(orgId).role in roles;
+      return activeMember(orgId)
+        && member(orgId).role is string
+        && member(orgId).role in roles;
     }
 
-    function sameOrg(orgId) {
-      return request.resource.data.orgId == orgId;
+    function hasPermission(orgId, permission) {
+      return activeMember(orgId)
+        && member(orgId).keys().hasAll(['permissions'])
+        && member(orgId).permissions is list
+        && permission in member(orgId).permissions;
     }
 
-    function immutableOrg(orgId) {
-      return request.resource.data.orgId == orgId
-        && resource.data.orgId == orgId;
+    function allFacilities(orgId) {
+      return activeMember(orgId)
+        && member(orgId).keys().hasAll(['allFacilities'])
+        && member(orgId).allFacilities == true;
     }
 
-    function actionCreateValid(orgId) {
-      return sameOrg(orgId)
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.status in ['OPEN', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED']
-        && request.resource.data.riskLevel in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
-        && request.resource.data.keys().hasAll([
-          'orgId', 'title', 'status', 'riskLevel', 'createdBy', 'createdAt', 'updatedAt'
+    function hasFacilityList(orgId) {
+      return activeMember(orgId)
+        && member(orgId).keys().hasAll(['facilityIds'])
+        && member(orgId).facilityIds is list;
+    }
+
+    // Fail-closed: projeções sem facilityId são organizacionais e exigem escopo
+    // global. Membros limitados só recebem documentos com facilityId explícito.
+    function facilityAllowed(orgId, data) {
+      return activeMember(orgId)
+        && (
+          allFacilities(orgId)
+          || (
+            'facilityId' in data
+            && data.facilityId is string
+            && hasFacilityList(orgId)
+            && data.facilityId in member(orgId).facilityIds
+          )
+        );
+    }
+
+    function canReadRawSources(orgId) {
+      return roleIn(orgId, ['platform_admin', 'org_admin', 'auditor'])
+        || hasPermission(orgId, 'sources.raw.read');
+    }
+
+    function canReadOperational(orgId) {
+      return roleIn(orgId, [
+        'platform_admin', 'org_admin', 'director', 'auditor', 'operator'
+      ]) || hasPermission(orgId, 'operations.read');
+    }
+
+    function canReadFinancial(orgId) {
+      return roleIn(orgId, [
+        'platform_admin', 'org_admin', 'director', 'auditor', 'finance'
+      ]) || hasPermission(orgId, 'financial.read');
+    }
+
+    function canReadHospital(orgId) {
+      return roleIn(orgId, [
+        'platform_admin', 'org_admin', 'director', 'auditor', 'medical_auditor'
+      ]) || hasPermission(orgId, 'hospital.read');
+    }
+
+    function canReadClinical(orgId) {
+      return roleIn(orgId, [
+        'platform_admin', 'org_admin', 'auditor', 'medical_auditor'
+      ]) || hasPermission(orgId, 'clinical.read');
+    }
+
+    function canReadAudit(orgId) {
+      return roleIn(orgId, [
+        'platform_admin', 'org_admin', 'director', 'auditor'
+      ]) || hasPermission(orgId, 'audit.read');
+    }
+
+    function canReadActions(orgId) {
+      return canReadOperational(orgId)
+        || canReadFinancial(orgId)
+        || canReadHospital(orgId)
+        || hasPermission(orgId, 'actions.read');
+    }
+
+    function sanitizedDashboard(data) {
+      return data.keys().hasAll(['sanitized'])
+        && data.sanitized == true
+        && (
+          !('sensitivity' in data)
+          || data.sensitivity in ['PUBLIC', 'INTERNAL']
+        )
+        && !data.keys().hasAny([
+          'raw', 'rawText', 'record', 'normalized', 'sourceSnapshot',
+          'clinicalEvidence', 'patientId', 'cpf', 'cns',
+          'diagnosis', 'diagnostico'
         ]);
     }
 
-    function actionUpdateValid(orgId) {
-      return immutableOrg(orgId)
-        && request.resource.data.createdBy == resource.data.createdBy
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'title', 'description', 'status', 'riskLevel', 'assigneeId',
-          'dueAt', 'resolution', 'evidenceRefs', 'updatedAt'
-        ]);
+    function sourceDocument(orgId, documentId) {
+      return get(
+        /databases/$(database)/documents/organizations/$(orgId)/sourceDocuments/$(documentId)
+      ).data;
     }
 
     match /organizations/{orgId} {
-      allow read: if activeMember(orgId);
-      allow create, update, delete: if false;
+      allow get: if activeMember(orgId);
+      allow list, create, update, delete: if false;
 
       match /members/{uid} {
-        allow read: if activeMember(orgId)
-          && (request.auth.uid == uid || roleIn(orgId, ['platform_admin', 'org_admin', 'auditor']));
-        allow write: if false;
+        allow get: if activeMember(orgId)
+          && (
+            request.auth.uid == uid
+            || roleIn(orgId, ['platform_admin', 'org_admin', 'auditor'])
+            || hasPermission(orgId, 'members.read')
+          );
+        allow list: if roleIn(orgId, ['platform_admin', 'org_admin', 'auditor'])
+          || hasPermission(orgId, 'members.read');
+        allow create, update, delete: if false;
       }
 
       match /facilities/{facilityId} {
@@ -70,94 +145,128 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Metadados/documentos-fonte podem conter conteúdo restrito. Viewer não
+      // recebe acesso implícito; é necessário papel privilegiado ou permissão.
       match /sourceDocuments/{documentId} {
-        allow read: if roleIn(orgId, [
-          'platform_admin', 'org_admin', 'director', 'auditor',
-          'medical_auditor', 'finance', 'operator', 'viewer'
-        ]);
+        allow read: if canReadRawSources(orgId)
+          && facilityAllowed(orgId, resource.data);
         allow write: if false;
 
         match /versions/{versionId} {
-          allow read: if roleIn(orgId, [
-            'platform_admin', 'org_admin', 'director', 'auditor',
-            'medical_auditor', 'finance', 'operator'
-          ]);
+          allow read: if canReadRawSources(orgId)
+            && facilityAllowed(orgId, sourceDocument(orgId, documentId));
           allow write: if false;
         }
 
         match /events/{eventId} {
-          allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'director', 'auditor']);
+          allow read: if canReadAudit(orgId)
+            && facilityAllowed(orgId, sourceDocument(orgId, documentId));
           allow write: if false;
         }
       }
 
       match /{collection}/{documentId} {
         allow read: if collection in [
-          'periods', 'professionals', 'shifts', 'productivityRecords',
-          'contracts', 'contractRules', 'invoices', 'bankTransactions',
-          'financialEntries', 'taxObligations', 'reconciliations',
-          'monthlyClosings', 'hospitalAccounts', 'authorizations',
-          'billingItems', 'glosses', 'appeals', 'opmeItems',
-          'qualityIndicators', 'auditFindings', 'runtimeCheckpoints'
-        ] && activeMember(orgId);
+          'professionals', 'shifts', 'productivityRecords',
+          'runtimeCheckpoints'
+        ]
+          && canReadOperational(orgId)
+          && facilityAllowed(orgId, resource.data);
+        allow write: if false;
+      }
+
+      match /{collection}/{documentId} {
+        allow read: if collection in [
+          'periods', 'contracts', 'contractRules', 'invoices',
+          'bankTransactions', 'financialEntries', 'taxObligations',
+          'reconciliations', 'monthlyClosings'
+        ]
+          && canReadFinancial(orgId)
+          && facilityAllowed(orgId, resource.data);
+        allow write: if false;
+      }
+
+      match /{collection}/{documentId} {
+        allow read: if collection in [
+          'hospitalAccounts', 'authorizations', 'billingItems', 'glosses',
+          'appeals', 'opmeItems', 'qualityIndicators', 'auditFindings'
+        ]
+          && canReadHospital(orgId)
+          && facilityAllowed(orgId, resource.data);
         allow write: if false;
       }
 
       match /clinicalEvidence/{evidenceId} {
-        allow read: if roleIn(orgId, [
-          'platform_admin', 'org_admin', 'director', 'auditor', 'medical_auditor'
-        ]);
+        allow read: if canReadClinical(orgId)
+          && facilityAllowed(orgId, resource.data);
         allow write: if false;
       }
 
+      // Somente projeções explicitamente sanitizadas são legíveis pelo app.
+      match /dashboardSnapshots/{snapshotId} {
+        allow read: if activeMember(orgId)
+          && sanitizedDashboard(resource.data)
+          && facilityAllowed(orgId, resource.data);
+        allow write: if false;
+      }
+
+      // Comandos humanos passam pelo FastAPI/Admin SDK. O cliente apenas lê.
       match /actionItems/{actionId} {
-        allow read: if activeMember(orgId);
-        allow create: if roleIn(orgId, [
-          'platform_admin', 'org_admin', 'director', 'auditor',
-          'medical_auditor', 'finance', 'operator'
-        ]) && actionCreateValid(orgId);
-        allow update: if roleIn(orgId, [
-          'platform_admin', 'org_admin', 'director', 'auditor',
-          'medical_auditor', 'finance', 'operator'
-        ]) && actionUpdateValid(orgId);
-        allow delete: if false;
+        allow read: if canReadActions(orgId)
+          && facilityAllowed(orgId, resource.data);
+        allow create, update, delete: if false;
       }
 
       match /approvals/{approvalId} {
-        allow read: if activeMember(orgId);
+        allow read: if canReadActions(orgId)
+          && facilityAllowed(orgId, resource.data);
         allow write: if false;
       }
 
       match /auditEvents/{eventId} {
-        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'director', 'auditor']);
+        allow read: if canReadAudit(orgId)
+          && facilityAllowed(orgId, resource.data);
         allow write: if false;
       }
 
       match /aiRuns/{runId} {
-        allow read: if roleIn(orgId, [
-          'platform_admin', 'org_admin', 'director', 'auditor', 'medical_auditor'
-        ]);
+        allow read: if (
+          canReadAudit(orgId)
+          || canReadClinical(orgId)
+          || hasPermission(orgId, 'ai.read')
+        ) && facilityAllowed(orgId, resource.data);
         allow write: if false;
       }
 
       match /integrationEvents/{eventId} {
-        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'auditor']);
+        allow read: if (
+          roleIn(orgId, ['platform_admin', 'org_admin', 'auditor'])
+          || hasPermission(orgId, 'integrations.read')
+        ) && facilityAllowed(orgId, resource.data);
         allow write: if false;
       }
 
       match /workflowRuns/{runId} {
-        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'director', 'auditor', 'operator']);
+        allow read: if canReadOperational(orgId)
+          && facilityAllowed(orgId, resource.data);
         allow write: if false;
       }
 
       match /runtimeLocks/{lockId} {
-        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'auditor', 'operator']);
+        allow read: if canReadOperational(orgId)
+          && facilityAllowed(orgId, resource.data);
         allow write: if false;
       }
 
       match /deadLetters/{itemId} {
-        allow read: if roleIn(orgId, ['platform_admin', 'org_admin', 'auditor', 'operator']);
+        allow read: if canReadOperational(orgId)
+          && facilityAllowed(orgId, resource.data);
         allow write: if false;
+      }
+
+      // Tokens/chaves idempotentes da API nunca são expostos ao cliente.
+      match /apiIdempotency/{idempotencyId} {
+        allow read, write: if false;
       }
 
       match /{document=**} {

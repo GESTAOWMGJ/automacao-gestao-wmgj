@@ -64,6 +64,29 @@ function wmgjFirestoreMigrarAba_(ss, sheetName, config, limit, bridgeConfig) {
 
   var width = sheet.getLastColumn();
   var headers = sheet.getRange(1, 1, 1, width).getDisplayValues()[0];
+  var blockedClinicalHeaders = wmgjFirestoreClinicalHeaders_(headers);
+  if (blockedClinicalHeaders.length > 0) {
+    var quarantineId = wmgjFirestoreHashString_([
+      ss.getId(),
+      sheetName,
+      blockedClinicalHeaders.join(','),
+      WMGJ_FIRESTORE_MIGRATION_VERSION
+    ].join('|')).slice(0, 32);
+    var quarantine = {
+      ok: false,
+      quarantined: true,
+      quarantineId: quarantineId,
+      reason: 'CAMPOS_CLINICOS_IDENTIFICAVEIS_BLOQUEADOS_PRIMEIRO_BACKFILL',
+      sheet: sheetName,
+      blockedHeaders: blockedClinicalHeaders,
+      sent: 0,
+      duplicates: 0,
+      errors: 1,
+      checkpointAdvanced: false
+    };
+    wmgjFirestoreLog_('MIGRATION_QUARANTINE', 'ERRO', quarantine);
+    return quarantine;
+  }
   var values = sheet.getRange(startRow, 1, rowsToRead, width).getDisplayValues();
   var sent = 0;
   var duplicates = 0;
@@ -77,21 +100,25 @@ function wmgjFirestoreMigrarAba_(ss, sheetName, config, limit, bridgeConfig) {
 
     var record = wmgjFirestoreRowObject_(headers, row);
     var rowHash = wmgjFirestoreHashString_(JSON.stringify(record));
-    var entityKey = wmgjFirestoreEntityKey_(sheetName, record, rowNumber, rowHash);
+    var entityKey = wmgjFirestoreEntityKey_(sheetName, record, rowNumber);
     var legacyStatus = String(record.status || record.status_processamento || record.status_auditoria || '');
     var workflow = wmgjFirestoreWorkflowFromLegacy_(legacyStatus);
+    var occurredAt = new Date();
     var event = {
       schemaVersion: 1,
       eventId: Utilities.getUuid(),
       eventType: 'ENTITY_UPSERT',
       orgId: bridgeConfig.orgId,
-      occurredAt: new Date().toISOString(),
+      occurredAt: occurredAt.toISOString(),
+      // O primeiro backfill trata a linha legada como versão congelada 1.
+      // Mudanças posteriores falham fechadas até existir versionador durável.
+      sourceVersion: 1,
       idempotencyKey: [bridgeConfig.orgId, 'SHEETS', ss.getId(), sheetName, rowNumber, rowHash].join(':'),
       entityType: config.entityType,
       entityKey: entityKey,
       actor: {
         type: 'SYSTEM',
-        id: Session.getEffectiveUser().getEmail() || 'apps-script',
+        id: wmgjFirestoreActorId_(),
         source: 'WMGJ_SHEETS_BACKFILL'
       },
       source: {
@@ -170,19 +197,58 @@ function wmgjFirestoreNormalizeHeader_(header, index) {
   return key || 'col_' + (index + 1);
 }
 
-function wmgjFirestoreEntityKey_(sheetName, record, rowNumber, hash) {
-  var candidates = [
+function wmgjFirestoreClinicalHeaders_(headers) {
+  var exactBlocked = {
+    'data_nascimento': true,
+    'nome_da_mae': true,
+    'nome_mae': true,
+    'cartao_sus': true,
+    'cartao_nacional_saude': true,
+    'medical_record': true,
+    'date_of_birth': true
+  };
+  var blockedTokens = {
+    'cpf': true,
+    'cns': true,
+    'paciente': true,
+    'patient': true,
+    'diagnostico': true,
+    'diagnosis': true,
+    'prontuario': true,
+    'cid': true,
+    'cid10': true
+  };
+  var blocked = [];
+
+  (headers || []).forEach(function(header, index) {
+    var key = wmgjFirestoreNormalizeHeader_(header, index);
+    var tokens = key.split('_');
+    var isBlocked = Boolean(exactBlocked[key]);
+    for (var i = 0; i < tokens.length && !isBlocked; i++) {
+      isBlocked = Boolean(blockedTokens[tokens[i]]);
+    }
+    if (isBlocked && blocked.indexOf(key) === -1) blocked.push(key);
+  });
+
+  return blocked.sort();
+}
+
+function wmgjFirestoreEntityKey_(sheetName, record, rowNumber) {
+  var strongCandidates = [
     record.chave_acesso,
-    record.numero_nf,
     record.id_operacao,
     record.id_origem,
     record.message_id,
-    record.id_drive,
-    record.competencia_assistencial,
-    record.competencia,
-    record.data_registro
+    record.id_drive
   ].filter(function(value) { return Boolean(value); });
-  return [sheetName].concat(candidates.slice(0, 4)).concat([hash.slice(0, 16)]).join(':') || sheetName + ':' + rowNumber;
+  if (strongCandidates.length > 0) {
+    return [sheetName, strongCandidates[0]].join(':');
+  }
+  // O hash pertence à versão/idempotência, nunca à identidade da entidade.
+  // Campos fracos como número de nota/competência não garantem unicidade. Para
+  // linhas legadas sem identificador forte, a posição na fonte congelada é o
+  // fallback estável e evita colisões entre registros de mesma competência.
+  return sheetName + ':legacy-row:' + rowNumber;
 }
 
 function wmgjFirestoreFindCompetence_(record) {
