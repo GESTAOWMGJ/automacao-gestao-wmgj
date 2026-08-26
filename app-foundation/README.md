@@ -52,7 +52,7 @@ Para subir a interface:
 npm run dev
 ```
 
-Sem variáveis Firebase, a interface entra deliberadamente em modo de demonstração. O projeto de produção não é criado nem implantado por este repositório.
+A interface desta entrega permanece deliberadamente demonstrativa. As variáveis Firebase apenas preparam os adaptadores cliente; a troca para dados autenticados pertence à F3. O projeto de produção não é criado nem implantado por este repositório.
 
 ## Antes de criar o Firestore de produção
 

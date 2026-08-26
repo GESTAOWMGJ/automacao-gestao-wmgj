@@ -7,6 +7,7 @@ on:
       - ".github/workflows/validate-firestore-mvp.yml"
   push:
     branches:
+      - "main"
       - "codex/firestore-mvp"
     paths:
       - "app-foundation/**"

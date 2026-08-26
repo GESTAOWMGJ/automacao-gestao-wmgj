@@ -160,6 +160,7 @@ Todo documento de domínio deve conter, quando aplicável:
 Regras adicionais:
 
 - `tenantId`, `siteId` e identificadores são opacos; nunca derivar IDs de nome, CNPJ ou conteúdo da planilha;
+- `siteId: null` representa escopo tenant-wide e só é autorizado para membro com `allSites: true`;
 - horários autoritativos são gerados no servidor;
 - projeções mutáveis usam `revision`, `updatedAt` e `updatedBy`;
 - correção cria versão ou decisão nova; não reescreve evidência anterior;
@@ -217,7 +218,7 @@ Campos canônicos de associação:
 }
 ```
 
-`auditarCodigo` e `marcarRevisado` já exigem segundo fator no backend. A expansão de ações privilegiadas deve ocorrer por lista positiva, nunca por exceção aberta.
+`auditarCodigo` e `marcarRevisado` já exigem segundo fator no backend. Ações de revisão exigem `targetId`, `expectedRevision` e unidade compatível antes de serem enfileiradas. A expansão de ações privilegiadas deve ocorrer por lista positiva, nunca por exceção aberta.
 
 ## 10. Regras de acesso
 
@@ -229,6 +230,7 @@ O contrato vigente é:
 - limite máximo de 100 itens para `list`;
 - isolamento por `tenantId` no caminho;
 - escopo opcional por `siteId`;
+- documento com `siteId` ausente ou nulo é tenant-wide e fica invisível para membro restrito a unidades;
 - escrita do cliente negada em todas as coleções críticas;
 - evidência, idempotência, outbox e staging acessíveis apenas pelo backend.
 
@@ -283,7 +285,7 @@ O utilitário `classifySanitizedMetadata` aceita somente:
 - indicadores booleanos;
 - sinais enumerados.
 
-O schema estrito rejeita campos extras, inclusive OCR. Confiança abaixo do limiar exige revisão humana. O classificador nunca fecha registro, aprova migração ou publica relatório.
+O schema estrito rejeita campos extras, inclusive OCR, e permite somente MIME types, categorias e códigos de motivo enumerados. Confiança abaixo de 0,60 obriga `reviewRequired: true` na validação do retorno. O classificador nunca fecha registro, aprova migração ou publica relatório.
 
 Logs de aplicação admitem apenas códigos enumerados, `correlationId`, serviço, versão, duração e estado. É proibido registrar payload, `snapshot.data()`, texto de planilha, prompt, resposta, exceção bruta de provedor ou nome original de arquivo.
 

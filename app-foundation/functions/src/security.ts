@@ -3,12 +3,27 @@ import type { DocumentData, Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { db } from "./firebase.js";
 
-interface Membership extends DocumentData {
+export interface Membership extends DocumentData {
   status?: string;
   permissions?: string[];
   allSites?: boolean;
   siteIds?: string[];
   expiresAt?: { toMillis(): number };
+}
+
+export function assertSiteScope(
+  member: Membership,
+  siteId: string | null,
+): void {
+  if (member.allSites === true) {
+    return;
+  }
+  if (siteId === null) {
+    throw new HttpsError("permission-denied", "SITE_SCOPE_REQUIRED");
+  }
+  if (!member.siteIds?.includes(siteId)) {
+    throw new HttpsError("permission-denied", "SITE_SCOPE_DENIED");
+  }
 }
 
 export function hasSecondFactor(token: DecodedIdToken): boolean {
@@ -45,13 +60,7 @@ export async function authorizeInTransaction(
     throw new HttpsError("permission-denied", "PERMISSION_MISSING");
   }
 
-  if (
-    siteId !== null &&
-    member.allSites !== true &&
-    !member.siteIds?.includes(siteId)
-  ) {
-    throw new HttpsError("permission-denied", "SITE_SCOPE_DENIED");
-  }
+  assertSiteScope(member, siteId);
 
   return member;
 }

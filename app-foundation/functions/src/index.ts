@@ -3,7 +3,7 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
-import { appendAuditEvent } from "./audit.js";
+import { appendAuditEvent, appendAuditEvents } from "./audit.js";
 import {
   actionPermission,
   mfaRequiredActions,
@@ -89,6 +89,26 @@ export const requestOperationalAction = onCall(
         command.siteId,
       );
 
+      if (command.targetId !== null) {
+        const targetRef = db.doc(
+          `tenants/${command.tenantId}/validation_tasks/${command.targetId}`,
+        );
+        const targetSnapshot = await transaction.get(targetRef);
+        if (!targetSnapshot.exists) {
+          throw new HttpsError("not-found", "VALIDATION_TARGET_NOT_FOUND");
+        }
+        const target = targetSnapshot.data() as {
+          siteId?: string | null;
+          revision?: number;
+        };
+        if ((target.siteId ?? null) !== command.siteId) {
+          throw new HttpsError("failed-precondition", "TARGET_SITE_MISMATCH");
+        }
+        if (target.revision !== command.expectedRevision) {
+          throw new HttpsError("aborted", "REVISION_CONFLICT");
+        }
+      }
+
       const idempotencySnapshot = await transaction.get(idempotencyRef);
       if (idempotencySnapshot.exists) {
         const previous = idempotencySnapshot.data() as {
@@ -115,6 +135,7 @@ export const requestOperationalAction = onCall(
         dataClass: "INTERNAL",
         action: command.action,
         reasonCode: command.reasonCode,
+        targetId: command.targetId,
         expectedRevision: command.expectedRevision,
         status: "QUEUED",
         revision: 1,
@@ -130,6 +151,7 @@ export const requestOperationalAction = onCall(
 
       const auditEventId = await appendAuditEvent(transaction, {
         tenantId: command.tenantId,
+        siteId: command.siteId,
         aggregateType: "ACTION_REQUEST",
         aggregateId: actionRef.id,
         action: "ACTION_QUEUED",
@@ -182,6 +204,7 @@ export const onSourceCreated = onDocumentCreated(
       siteId?: string | null;
       schemaVersion?: number;
       revision?: number;
+      status?: string;
     };
     const processorVersion = "metadata-classifier-0.1.0";
     const schemaVersion = source.schemaVersion ?? 1;
@@ -219,24 +242,56 @@ export const onSourceCreated = onDocumentCreated(
         createdAt: now.toDate().toISOString(),
         nextAttemptAt: now.toDate().toISOString(),
       });
-      const auditEventId = await appendAuditEvent(transaction, {
-        tenantId,
-        aggregateType: "PROCESSING_RUN",
-        aggregateId: runId,
-        action: "PROCESSING_QUEUED",
-        actorKind: "SERVICE",
-        actorUid: "onSourceCreated",
-        correlationId: event.id,
-        causationId: sourceId,
-        reasonCode: "SOURCE_CREATED",
-        beforeHash: null,
-        afterHash,
+      const sourceBeforeHash = sha256({
+        sourceId,
+        siteId: source.siteId ?? null,
+        status: source.status ?? null,
+        revision: source.revision ?? 0,
       });
+      const sourceAfterHash = sha256({
+        sourceId,
+        siteId: source.siteId ?? null,
+        status: "QUEUED",
+        revision: (source.revision ?? 0) + 1,
+      });
+      const [runAuditEventId, sourceAuditEventId] = await appendAuditEvents(
+        transaction,
+        [
+          {
+            tenantId,
+            siteId: source.siteId ?? null,
+            aggregateType: "PROCESSING_RUN",
+            aggregateId: runId,
+            action: "PROCESSING_QUEUED",
+            actorKind: "SERVICE",
+            actorUid: "onSourceCreated",
+            correlationId: event.id,
+            causationId: sourceId,
+            reasonCode: "SOURCE_CREATED",
+            beforeHash: null,
+            afterHash,
+          },
+          {
+            tenantId,
+            siteId: source.siteId ?? null,
+            aggregateType: "SOURCE",
+            aggregateId: sourceId,
+            action: "SOURCE_QUEUED",
+            actorKind: "SERVICE",
+            actorUid: "onSourceCreated",
+            correlationId: event.id,
+            causationId: runId,
+            reasonCode: "PROCESSING_RUN_CREATED",
+            beforeHash: sourceBeforeHash,
+            afterHash: sourceAfterHash,
+          },
+        ],
+      );
 
       transaction.create(runRef, {
         ...runRecord,
         integrity: { payloadSha256: afterHash, schemaVersion },
-        auditEventId,
+        auditEventId: runAuditEventId,
       });
       transaction.set(
         event.data!.ref,
@@ -245,6 +300,7 @@ export const onSourceCreated = onDocumentCreated(
           revision: FieldValue.increment(1),
           updatedAt: now,
           updatedBy: { kind: "SERVICE", id: "onSourceCreated" },
+          lastAuditEventId: sourceAuditEventId,
         },
         { merge: true },
       );

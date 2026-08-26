@@ -14,6 +14,7 @@ export type OperationalActionName =
 export interface QueueActionInput {
   tenantId: string;
   siteId: string | null;
+  commandId: string;
   action: OperationalActionName;
   reasonCode:
     | "MANUAL_DIAGNOSTIC"
@@ -23,6 +24,7 @@ export interface QueueActionInput {
     | "STATUS_VALIDATION"
     | "HUMAN_REVIEW_OPENED"
     | "HUMAN_REVIEW_DECIDED";
+  targetId: string | null;
   expectedRevision: number | null;
 }
 
@@ -37,15 +39,16 @@ export async function queueOperationalAction(
   input: QueueActionInput,
 ): Promise<QueueActionResult> {
   const { functions } = getFirebaseServices();
-  const callable = httpsCallable<
-    QueueActionInput & { commandId: string },
-    QueueActionResult
-  >(functions, "requestOperationalAction");
-  const result = await callable({
-    ...input,
-    commandId: crypto.randomUUID(),
-  });
+  const callable = httpsCallable<QueueActionInput, QueueActionResult>(
+    functions,
+    "requestOperationalAction",
+  );
+  const result = await callable(input);
   return result.data;
+}
+
+export function createOperationalCommandId(): string {
+  return crypto.randomUUID();
 }
 
 export async function loadOperationalSnapshot<T>(

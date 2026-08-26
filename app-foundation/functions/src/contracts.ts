@@ -30,6 +30,10 @@ const reasonCodeByAction = {
   marcarRevisado: "HUMAN_REVIEW_DECIDED",
 } as const;
 
+const targetedReviewActions = new Set<
+  (typeof operationalActions)[number]
+>(["abrirRevisao", "marcarRevisado"]);
+
 export const operationalActionSchema = z
   .object({
     tenantId: z.string().min(3).max(128).regex(/^[A-Za-z0-9_-]+$/),
@@ -37,6 +41,12 @@ export const operationalActionSchema = z
     commandId: z.uuid(),
     action: z.enum(operationalActions),
     reasonCode: z.enum(operationalReasonCodes),
+    targetId: z
+      .string()
+      .min(3)
+      .max(128)
+      .regex(/^[A-Za-z0-9_-]+$/)
+      .nullable(),
     expectedRevision: z.number().int().nonnegative().nullable(),
   })
   .strict()
@@ -46,6 +56,22 @@ export const operationalActionSchema = z
         code: "custom",
         path: ["reasonCode"],
         message: "REASON_CODE_ACTION_MISMATCH",
+      });
+    }
+
+    const requiresTarget = targetedReviewActions.has(value.action);
+    if (requiresTarget && (value.targetId === null || value.expectedRevision === null)) {
+      context.addIssue({
+        code: "custom",
+        path: ["targetId"],
+        message: "REVIEW_TARGET_AND_REVISION_REQUIRED",
+      });
+    }
+    if (!requiresTarget && (value.targetId !== null || value.expectedRevision !== null)) {
+      context.addIssue({
+        code: "custom",
+        path: ["targetId"],
+        message: "TARGET_NOT_ALLOWED_FOR_ACTION",
       });
     }
   });
@@ -127,7 +153,16 @@ export const classificationOutputSchema = z
     reviewRequired: z.boolean(),
     reasonCodes: z.array(z.enum(classificationReasonCodes)).max(8),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.confidence < 0.6 && !value.reviewRequired) {
+      context.addIssue({
+        code: "custom",
+        path: ["reviewRequired"],
+        message: "LOW_CONFIDENCE_REQUIRES_REVIEW",
+      });
+    }
+  });
 
 export type SanitizedClassificationInput = z.infer<
   typeof sanitizedClassificationInputSchema

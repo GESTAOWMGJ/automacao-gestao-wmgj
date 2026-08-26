@@ -27,10 +27,10 @@ service cloud.firestore {
     }
 
     function siteAllowed(tenantId, data) {
-      return !("siteId" in data)
-        || data.siteId == null
-        || memberData(tenantId).allSites == true
-        || data.siteId in memberData(tenantId).siteIds;
+      return memberData(tenantId).allSites == true
+        || (("siteId" in data)
+          && data.siteId != null
+          && data.siteId in memberData(tenantId).siteIds);
     }
 
     function boundedList() {
@@ -103,8 +103,11 @@ service cloud.firestore {
       }
 
       match /audit_events/{eventId} {
-        allow get: if hasPermission(tenantId, "audit.read");
-        allow list: if hasPermission(tenantId, "audit.read") && boundedList();
+        allow get: if hasPermission(tenantId, "audit.read")
+          && siteAllowed(tenantId, resource.data);
+        allow list: if hasPermission(tenantId, "audit.read")
+          && siteAllowed(tenantId, resource.data)
+          && boundedList();
         allow create, update, delete: if false;
       }
 

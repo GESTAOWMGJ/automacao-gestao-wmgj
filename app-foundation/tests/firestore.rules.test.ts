@@ -15,6 +15,7 @@ import {
   limit,
   query,
   setDoc,
+  where,
 } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 
@@ -25,6 +26,7 @@ async function seed(): Promise<void> {
   await environment.withSecurityRulesDisabled(async (context) => {
     const firestore = context.firestore();
     const future = Timestamp.fromMillis(Date.now() + 60 * 60 * 1000);
+    const past = Timestamp.fromMillis(Date.now() - 60 * 60 * 1000);
     await setDoc(doc(firestore, "tenants/tenant-a"), {
       status: "ACTIVE",
     });
@@ -39,9 +41,31 @@ async function seed(): Promise<void> {
       siteIds: [],
       expiresAt: future,
     });
+    await setDoc(doc(firestore, "tenants/tenant-a/members/user-site"), {
+      status: "ACTIVE",
+      permissions: ["dashboard.read", "validation.read", "audit.read"],
+      allSites: false,
+      siteIds: ["site-alpha"],
+      expiresAt: future,
+    });
+    await setDoc(doc(firestore, "tenants/tenant-a/members/user-expired"), {
+      status: "ACTIVE",
+      permissions: ["dashboard.read"],
+      allSites: true,
+      siteIds: [],
+      expiresAt: past,
+    });
     await setDoc(
       doc(firestore, "tenants/tenant-a/dashboard_snapshots/current"),
       { siteId: null, status: "OK" },
+    );
+    await setDoc(
+      doc(firestore, "tenants/tenant-a/dashboard_snapshots/site-alpha"),
+      { siteId: "site-alpha", status: "OK" },
+    );
+    await setDoc(
+      doc(firestore, "tenants/tenant-a/dashboard_snapshots/site-beta"),
+      { siteId: "site-beta", status: "OK" },
     );
     await setDoc(
       doc(firestore, "tenants/tenant-a/validation_tasks/task-1"),
@@ -50,6 +74,14 @@ async function seed(): Promise<void> {
     await setDoc(
       doc(firestore, "tenants/tenant-a/audit_events/event-1"),
       { siteId: null, action: "SYNTHETIC" },
+    );
+    await setDoc(
+      doc(firestore, "tenants/tenant-a/audit_events/event-alpha"),
+      { siteId: "site-alpha", action: "SYNTHETIC" },
+    );
+    await setDoc(
+      doc(firestore, "tenants/tenant-a/audit_events/event-beta"),
+      { siteId: "site-beta", action: "SYNTHETIC" },
     );
     await setDoc(doc(firestore, "tenants/tenant-b"), {
       status: "ACTIVE",
@@ -98,6 +130,67 @@ describe("firestore.rules", () => {
           limit(50),
         ),
       ),
+    );
+  });
+
+  it("exige limite de até 100 itens nas consultas", async () => {
+    const firestore = environment.authenticatedContext("user-a").firestore();
+    const snapshots = collection(
+      firestore,
+      "tenants/tenant-a/dashboard_snapshots",
+    );
+
+    await assertFails(getDocs(query(snapshots)));
+    await assertFails(getDocs(query(snapshots, limit(101))));
+  });
+
+  it("restringe dashboard e auditoria à unidade explícita", async () => {
+    const firestore = environment
+      .authenticatedContext("user-site")
+      .firestore();
+
+    await assertSucceeds(
+      getDoc(
+        doc(
+          firestore,
+          "tenants/tenant-a/dashboard_snapshots/site-alpha",
+        ),
+      ),
+    );
+    await assertFails(
+      getDoc(
+        doc(firestore, "tenants/tenant-a/dashboard_snapshots/site-beta"),
+      ),
+    );
+    await assertFails(
+      getDoc(doc(firestore, "tenants/tenant-a/dashboard_snapshots/current")),
+    );
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(firestore, "tenants/tenant-a/dashboard_snapshots"),
+          where("siteId", "==", "site-alpha"),
+          limit(50),
+        ),
+      ),
+    );
+    await assertSucceeds(
+      getDoc(doc(firestore, "tenants/tenant-a/audit_events/event-alpha")),
+    );
+    await assertFails(
+      getDoc(doc(firestore, "tenants/tenant-a/audit_events/event-beta")),
+    );
+    await assertFails(
+      getDoc(doc(firestore, "tenants/tenant-a/audit_events/event-1")),
+    );
+  });
+
+  it("nega membro expirado", async () => {
+    const firestore = environment
+      .authenticatedContext("user-expired")
+      .firestore();
+    await assertFails(
+      getDoc(doc(firestore, "tenants/tenant-a/dashboard_snapshots/current")),
     );
   });
 
