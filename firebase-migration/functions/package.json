@@ -2,7 +2,9 @@
   "name": "wmgj-firestore-functions",
   "private": true,
   "main": "lib/index.js",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "build": "tsc",
     "lint": "tsc --noEmit",
@@ -15,6 +17,7 @@
     "firebase-functions": "^6.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "@types/node": "^22.0.0"
   }
 }
