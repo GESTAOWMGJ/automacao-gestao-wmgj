@@ -1,5 +1,8 @@
 # WMGJ App Foundation
 
+> Clinical-readiness only: clinical use, patient communication, production
+> deployment and real-data migration are disabled.
+
 MVP operacional para migrar gradualmente a base-mestra WMGJ para Cloud Firestore sem interromper o pipeline V3 atual.
 
 ## Entrega atual
@@ -67,9 +70,11 @@ A interface desta entrega permanece deliberadamente demonstrativa. As variáveis
 
 ```text
 app-foundation/
+  api/                 contrato FastAPI sintético e somente leitura
   functions/src/       backend e contratos
   src/                 dashboard e adaptadores cliente
   tests/               contratos e Security Rules
+  scripts/migration/   dry-run sintético sem I/O externo
   docs/                arquitetura e migração
   firestore.rules      autorização de leitura
   storage.rules        objetos privados
