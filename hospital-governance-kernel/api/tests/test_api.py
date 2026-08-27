@@ -38,7 +38,9 @@ SECRET = "test-only-hmac-secret-with-32-bytes-minimum"
 EVIDENCE_REF = f"synthetic://sha256/{hashlib.sha256(b'evidence-001').hexdigest()}"
 
 
-def settings(mode="dry-run"):
+def settings(mode="dry-run", *, shared_idempotency_verified=None):
+    if shared_idempotency_verified is None:
+        shared_idempotency_verified = mode == "active"
     return Settings(
         mode=mode,
         current_key_id="staging-current",
@@ -46,6 +48,7 @@ def settings(mode="dry-run"):
         previous_key_id="staging-previous",
         previous_secret="previous-test-only-secret-with-32-bytes",
         replay_window_seconds=300,
+        shared_idempotency_verified=shared_idempotency_verified,
         openai_api_key="sk-test-not-a-real-key" if mode == "active" else "",
         openai_model="gpt-5.6",
         openai_model_allowlist=("gpt-5.6",),
@@ -177,6 +180,29 @@ def test_nonce_replay_is_rejected():
     replay = client.post(ANALYZE_PATH, content=body, headers=headers)
     assert replay.status_code == 409
     assert replay.json()["detail"] == "NONCE_REPLAY"
+
+
+def test_active_mode_fails_closed_without_verified_shared_idempotency():
+    called = False
+
+    def handler(request):
+        nonlocal called
+        called = True
+        return httpx.Response(200, json=completed_upstream())
+
+    app = create_app(
+        settings("active", shared_idempotency_verified=False),
+        openai_transport=httpx.MockTransport(handler),
+    )
+    client = TestClient(app)
+    ready = client.get("/readyz")
+    response = post_json(client, payload())
+
+    assert ready.status_code == 503
+    assert ready.json()["detail"] == "ACTIVE_SHARED_IDEMPOTENCY_UNVERIFIED"
+    assert response.status_code == 503
+    assert response.json()["detail"] == "ACTIVE_SHARED_IDEMPOTENCY_UNVERIFIED"
+    assert called is False
 
 
 @pytest.mark.parametrize(

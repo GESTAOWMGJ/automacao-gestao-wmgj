@@ -151,6 +151,7 @@ class Settings:
     previous_key_id: str
     previous_secret: str
     replay_window_seconds: int
+    shared_idempotency_verified: bool
     openai_api_key: str
     openai_model: str
     openai_model_allowlist: tuple[str, ...]
@@ -171,6 +172,9 @@ class Settings:
             previous_key_id=os.getenv("HKGK_INTERNAL_KEY_ID_PREVIOUS", ""),
             previous_secret=os.getenv("HKGK_INTERNAL_HMAC_PREVIOUS", ""),
             replay_window_seconds=max(30, min(900, int(os.getenv("HKGK_REPLAY_WINDOW_SECONDS", "300")))),
+            shared_idempotency_verified=(
+                os.getenv("HKGK_SHARED_IDEMPOTENCY_VERIFIED", "").strip().lower() == "verified"
+            ),
             openai_api_key=os.getenv("OPENAI_API_KEY", ""),
             openai_model=os.getenv("OPENAI_MODEL", "gpt-5.6"),
             openai_model_allowlist=allowlist,
@@ -399,6 +403,8 @@ def create_app(
     @app.get("/readyz")
     async def readyz() -> dict[str, str]:
         if resolved.mode == "active":
+            if not resolved.shared_idempotency_verified:
+                raise HTTPException(status_code=503, detail="ACTIVE_SHARED_IDEMPOTENCY_UNVERIFIED")
             if not resolved.openai_api_key or resolved.openai_model not in resolved.openai_model_allowlist:
                 raise HTTPException(status_code=503, detail="ACTIVE_CONFIGURATION_INCOMPLETE")
         if len(resolved.current_secret.encode("utf-8")) < MIN_HMAC_SECRET_BYTES:
@@ -501,6 +507,8 @@ def create_app(
                 correlationId=x_correlation_id,
             )
 
+        if not resolved.shared_idempotency_verified:
+            reject(503, "ACTIVE_SHARED_IDEMPOTENCY_UNVERIFIED")
         if resolved.openai_model not in resolved.openai_model_allowlist:
             reject(503, "MODEL_NOT_ALLOWLISTED")
         if not resolved.openai_api_key:

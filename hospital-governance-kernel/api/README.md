@@ -16,6 +16,7 @@ HKGK_INTERNAL_KEY_ID_CURRENT=staging-current
 HKGK_INTERNAL_HMAC_CURRENT=<secret>
 HKGK_INTERNAL_KEY_ID_PREVIOUS=<optional>
 HKGK_INTERNAL_HMAC_PREVIOUS=<optional>
+HKGK_SHARED_IDEMPOTENCY_VERIFIED=<empty in dry-run; exact value "verified" only after homologation>
 OPENAI_API_KEY=<secret>
 OPENAI_MODEL=gpt-5.6
 OPENAI_MODEL_ALLOWLIST=gpt-5.6
@@ -50,6 +51,8 @@ UTF-8(JSON(sort_keys=true, separators=(",", ":"), allow_nan=false))
 Alterações em organização, evidências, versão de prompt, regras, schema, sensibilidade, tarefa ou métricas invalidam o hash.
 
 O segredo HMAC selecionado precisa ter pelo menos 32 bytes. O tamanho declarado em `Content-Length` é verificado antes da leitura do corpo, e o limite é conferido novamente após a leitura. O cache de nonce é local à instância. O backend chamador precisa manter idempotência e lock distribuído por `inputHash + model`; isso evita duplicidade e custo repetido em múltiplas réplicas. O serviço não guarda estado nem recebe credencial Firebase.
+
+O modo `active` falha fechado enquanto `HKGK_SHARED_IDEMPOTENCY_VERIFIED` não tiver o valor exato `verified`. Essa variável é um gate operacional, não implementa o controle: só deve ser configurada depois que o lock e a idempotência compartilhados do chamador forem homologados com concorrência entre réplicas. O endpoint `/readyz` e a própria rota de análise aplicam o gate; portanto, ignorar o health check não libera chamadas ao modelo.
 
 A resposta upstream só é aceita com `status=completed`. Recusa, execução incompleta/falha, JSON inválido, evidência não autorizada, achado sem evidência ou risco geral inferior ao maior risco encontrado são falhas explícitas. Logs operacionais usam somente campos allowlisted e nunca incluem corpo, segredo, prompt ou saída do modelo.
 
