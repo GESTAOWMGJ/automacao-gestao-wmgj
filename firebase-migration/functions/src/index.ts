@@ -6,6 +6,19 @@ import { setGlobalOptions } from "firebase-functions/v2";
 import { onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as logger from "firebase-functions/logger";
+import {
+  auditDocumentHash,
+  mergeForAuditHash,
+  normalizedEntityForEvent,
+  producerContentHashForEvent,
+  semanticHashForEvent
+} from "./ingestion-integrity.js";
+import {
+  IngestionConflict,
+  assertCompleteStoredReceipt,
+  assertSameSemanticHash,
+  nextAggregateVersion
+} from "./mutation-contract.js";
 import { validateEvent } from "./validation.js";
 
 initializeApp();
@@ -44,28 +57,12 @@ const ENTITY_COLLECTIONS: Record<string, string> = {
   opmeItem: "opmeItems",
   qualityIndicator: "qualityIndicators",
   auditFinding: "auditFindings",
+  governanceCase: "governanceCases",
   aiRun: "aiRuns"
 };
 
 function sha256(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function stableValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(stableValue);
-  if (value && typeof value === "object") {
-    if (value instanceof Timestamp) return value.toDate().toISOString();
-    const record = value as Record<string, unknown>;
-    return Object.keys(record).sort().reduce<Record<string, unknown>>((acc, key) => {
-      if (!["createdAt", "updatedAt", "serverAt"].includes(key)) acc[key] = stableValue(record[key]);
-      return acc;
-    }, {});
-  }
-  return value;
-}
-
-function stableJson(value: unknown): string {
-  return JSON.stringify(stableValue(value));
 }
 
 function constantTimeHexEquals(expectedHex: string, receivedHex: string): boolean {
@@ -147,10 +144,20 @@ export const ingestWmgjEvent = onRequest(
       return;
     }
 
+    let collection: string;
     try {
-      const collection = collectionFor(event.entityType);
+      collection = collectionFor(event.entityType);
+    } catch {
+      res.status(400).json({ ok: false, code: "ENTITY_TYPE_NOT_ALLOWED" });
+      return;
+    }
+
+    try {
       const entityId = deterministicId(event.entityType, event.entityKey);
       const idempotencyId = sha256(event.idempotencyKey);
+      const payloadHash = sha256(rawBody);
+      const semanticHash = semanticHashForEvent(event);
+      const producerContentHash = producerContentHashForEvent(event, semanticHash);
       const orgRef = db.doc(`organizations/${event.orgId}`);
       const idemRef = orgRef.collection("integrationEvents").doc(idempotencyId);
       const entityRef = orgRef.collection(collection).doc(entityId);
@@ -163,35 +170,44 @@ export const ingestWmgjEvent = onRequest(
         const entitySnap = await tx.get(entityRef);
 
         if (!orgSnap.exists) throw new Error("ORGANIZATION_NOT_BOOTSTRAPPED");
-        if (idemSnap.exists) return { duplicate: true, entityId };
+        if (idemSnap.exists) {
+          const previousEvent = idemSnap.data();
+          assertSameSemanticHash(
+            previousEvent?.semanticHash,
+            semanticHash,
+            previousEvent?.payloadHash,
+            payloadHash
+          );
+          assertCompleteStoredReceipt(previousEvent ?? {});
+          return {
+            duplicate: true,
+            entityId,
+            eventId: String(previousEvent?.eventId || event.eventId),
+            aggregateVersion: Number(previousEvent?.aggregateVersion || 0),
+            auditEventId: String(previousEvent?.auditEventId || ""),
+            contentHash: producerContentHash,
+            semanticHash,
+            receiptId: idempotencyId
+          };
+        }
 
         const previous = entitySnap.exists ? entitySnap.data() : null;
+        const aggregateVersion = nextAggregateVersion(entitySnap.exists, previous?.version, event.expectedVersion);
         const occurredAt = Timestamp.fromDate(new Date(event.occurredAt));
-        const normalized = {
-          ...event.record,
-          orgId: event.orgId,
-          schemaVersion: 1,
-          entityType: event.entityType,
-          entityKey: event.entityKey,
-          competence: event.competence ?? null,
-          documentType: event.documentType ?? null,
-          workflowState: event.workflowState,
-          reviewState: event.reviewState,
-          riskLevel: event.riskLevel,
-          sensitivity: event.sensitivity,
-          source: event.source,
-          migration: {
-            eventId: event.eventId,
-            idempotencyId,
-            sourceSystem: event.source.system,
-            importedAt: FieldValue.serverTimestamp()
-          },
-          createdAt: entitySnap.exists ? previous?.createdAt ?? FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
-        };
+        const serverTimestamp = FieldValue.serverTimestamp();
+        const createdAt = entitySnap.exists
+          ? previous?.createdAt ?? serverTimestamp
+          : serverTimestamp;
+        const normalized = normalizedEntityForEvent(
+          event,
+          aggregateVersion,
+          idempotencyId,
+          serverTimestamp,
+          createdAt
+        );
 
-        const beforeHash = previous ? sha256(stableJson(previous)) : null;
-        const afterHash = sha256(stableJson({ ...event.record, workflowState: event.workflowState }));
+        const beforeHash = previous ? auditDocumentHash(previous) : null;
+        const afterHash = auditDocumentHash(mergeForAuditHash(previous ?? {}, normalized));
 
         tx.set(entityRef, normalized, { merge: true });
         tx.create(idemRef, {
@@ -202,7 +218,12 @@ export const ingestWmgjEvent = onRequest(
           entityId,
           sourceSystem: event.source.system,
           sourceId: event.source.sourceId,
-          payloadHash: sha256(rawBody),
+          metadata: event.metadata ?? {},
+          payloadHash,
+          semanticHash,
+          producerContentHash,
+          aggregateVersion,
+          auditEventId: auditRef.id,
           occurredAt,
           acceptedAt: FieldValue.serverTimestamp(),
           status: "ACCEPTED"
@@ -216,8 +237,11 @@ export const ingestWmgjEvent = onRequest(
           idempotencyId,
           actor: event.actor,
           source: event.source,
+          metadata: event.metadata ?? {},
           beforeHash,
           afterHash,
+          hashScope: "MERGED_DOCUMENT_EXCLUDING_SERVER_TIMESTAMPS_V1",
+          aggregateVersion,
           occurredAt,
           serverAt: FieldValue.serverTimestamp(),
           schemaVersion: 1
@@ -233,7 +257,16 @@ export const ingestWmgjEvent = onRequest(
           updatedAt: FieldValue.serverTimestamp()
         }, { merge: true });
 
-        return { duplicate: false, entityId };
+        return {
+          duplicate: false,
+          entityId,
+          eventId: event.eventId,
+          aggregateVersion,
+          auditEventId: auditRef.id,
+          contentHash: producerContentHash,
+          semanticHash,
+          receiptId: idempotencyId
+        };
       });
 
       res.status(result.duplicate ? 200 : 202).json({
@@ -241,9 +274,23 @@ export const ingestWmgjEvent = onRequest(
         accepted: !result.duplicate,
         duplicate: result.duplicate,
         entityId: result.entityId,
-        eventId: event.eventId
+        eventId: result.eventId,
+        aggregateVersion: result.aggregateVersion,
+        auditEventId: result.auditEventId,
+        contentHash: result.contentHash,
+        semanticHash: result.semanticHash,
+        receiptId: result.receiptId
       });
     } catch (error) {
+      if (error instanceof IngestionConflict) {
+        logger.warn("WMGJ ingest conflict", {
+          eventId: event.eventId,
+          entityType: event.entityType,
+          code: error.code
+        });
+        res.status(409).json({ ok: false, code: error.code });
+        return;
+      }
       logger.error("WMGJ ingest failed", {
         eventId: event.eventId,
         entityType: event.entityType,

@@ -1,0 +1,90 @@
+name: Validate Hospital Governance Kernel
+
+on:
+  pull_request:
+    paths:
+      - 'hospital-governance-kernel/**'
+      - 'firebase-migration/functions/**'
+      - '.github/workflows/validate-hospital-governance-kernel.yml'
+      - '.github/workflows/deploy-hospital-governance-kernel-staging.yml'
+  push:
+    branches:
+      - main
+      - 'feat/hospital-governance-kernel-*'
+    paths:
+      - 'hospital-governance-kernel/**'
+      - 'firebase-migration/functions/**'
+      - '.github/workflows/validate-hospital-governance-kernel.yml'
+      - '.github/workflows/deploy-hospital-governance-kernel-staging.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  apps-script-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # TODO(supply-chain): pin actions/checkout to a reviewed full commit SHA.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # TODO(supply-chain): pin actions/setup-node to a reviewed full commit SHA.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit source and scopes
+        working-directory: hospital-governance-kernel
+        run: npm run audit
+      - name: Run contract and policy tests
+        working-directory: hospital-governance-kernel
+        run: npm test
+
+  fastapi-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # TODO(supply-chain): pin actions/checkout to a reviewed full commit SHA.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # TODO(supply-chain): pin astral-sh/setup-uv to a reviewed full commit SHA.
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.11.33'
+      - name: Sync locked environment
+        working-directory: hospital-governance-kernel/api
+        run: uv sync --locked --group dev
+      - name: Run FastAPI tests
+        working-directory: hospital-governance-kernel/api
+        run: uv run pytest
+
+  firestore-functions-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # TODO(supply-chain): pin actions/checkout to a reviewed full commit SHA.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # TODO(supply-chain): pin actions/setup-node to a reviewed full commit SHA.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require reproducible npm lockfile
+        working-directory: firebase-migration/functions
+        run: test -f package-lock.json
+      - name: Install locked Functions dependencies
+        working-directory: firebase-migration/functions
+        run: npm ci
+      - name: Build Firestore Functions
+        working-directory: firebase-migration/functions
+        run: npm run build
+      - name: Run Functions tests when defined
+        working-directory: firebase-migration/functions
+        run: |
+          if node -e "const p = require('./package.json'); process.exit(p.scripts?.test ? 0 : 1)"; then
+            npm test
+          else
+            echo 'No Functions test script is defined; the TypeScript build remains mandatory.'
+          fi

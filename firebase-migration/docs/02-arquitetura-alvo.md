@@ -18,6 +18,7 @@ organizations/{orgId}
   aiRuns/{runId}
   actionItems/{actionId}
   approvals/{approvalId}
+  governanceCases/{caseId}
   periods/{YYYY-MM}
   ...domínios financeiros e hospitalares
 ```
@@ -33,6 +34,8 @@ A WMGJ usa `orgId=wmgj`. Cada novo hospital recebe organização e unidades pró
 5. **Regras:** Auth, papéis, isolamento por organização e campos controlados.
 6. **Aplicação:** React/TypeScript ou portal futuro sem dependência direta de abas.
 7. **IA:** execução registrada com modelo, prompt, regra, hash de entrada, saída e decisão humana.
+
+Toda projeção mutável usa controle otimista: o produtor envia `expectedVersion`, e o backend compara e incrementa `version` dentro da mesma transação. A mesma chave idempotente com o mesmo hash semântico é duplicata segura; a mesma chave com hash diferente retorna `409 IDEMPOTENCY_COLLISION`.
 
 ## Módulos permanentes
 

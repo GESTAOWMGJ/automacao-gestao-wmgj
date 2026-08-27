@@ -16,6 +16,7 @@ export const WORKFLOW_STATES = [
   "BLOCKED",
   "VALIDATED",
   "CLOSED",
+  "CANCELLED",
   "FAILED",
   "DEAD_LETTER"
 ] as const;
@@ -24,7 +25,9 @@ export const REVIEW_STATES = [
   "NOT_REQUIRED",
   "PENDING",
   "APPROVED",
-  "REJECTED"
+  "REJECTED",
+  "CHANGES_REQUESTED",
+  "EXPIRED"
 ] as const;
 
 export const RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"] as const;
@@ -37,6 +40,7 @@ export type RiskLevel = typeof RISK_LEVELS[number];
 export interface WmgjSource {
   system: "GMAIL" | "DRIVE" | "SHEETS" | "APPS_SCRIPT" | "MANUAL";
   sourceId: string;
+  sourceVersion?: string;
   parentId?: string;
   fileName?: string;
   mimeType?: string;
@@ -60,6 +64,7 @@ export interface WmgjIngestionEvent {
   idempotencyKey: string;
   entityType: string;
   entityKey: string;
+  expectedVersion: number;
   actor: WmgjActor;
   source: WmgjSource;
   workflowState: WorkflowState;

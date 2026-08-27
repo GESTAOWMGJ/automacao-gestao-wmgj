@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light">
+    <title>WMGJ Governance Kernel</title>
+    <?!= hkgkInclude_('Styles'); ?>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Pular para o conteúdo</a>
+    <header class="topbar">
+      <div class="title-block">
+        <p class="eyebrow">WMGJ · GOVERNANCE KERNEL</p>
+        <h1 id="insight-title">Carregando estado operacional…</h1>
+      </div>
+      <div class="topbar-status">
+        <div class="connection" aria-live="polite" aria-atomic="true">
+          <div class="status-pair">
+            <span id="freshness-badge" class="badge badge-loading">Frescor: CARREGANDO</span>
+            <span id="health-badge" class="badge badge-partial">Saúde: INDISPONÍVEL</span>
+          </div>
+          <span id="last-updated">Sem último sucesso confirmado</span>
+          <span id="snapshot-meta">Snapshot ainda não gerado</span>
+        </div>
+        <button id="print-dashboard" class="button button-topbar" type="button">Imprimir / PDF</button>
+      </div>
+    </header>
+
+    <main id="main" tabindex="-1" aria-busy="true">
+      <section class="metrics" aria-label="Resumo executivo">
+        <article class="metric metric-primary"><span>Pendentes na janela</span><strong id="metric-pending">—</strong></article>
+        <article class="metric"><span>Dead letters na janela</span><strong id="metric-dead">—</strong></article>
+        <article class="metric"><span>Recibos na janela</span><strong id="metric-receipts">—</strong></article>
+        <article class="metric"><span>Concluídos na janela</span><strong id="metric-success">—</strong></article>
+      </section>
+      <p id="coverage-note" class="scope-note" role="note">Janela de leitura ainda indisponível.</p>
+      <p id="component-status" class="component-status" role="status">Componentes ainda não avaliados.</p>
+
+      <section class="workspace">
+        <article class="panel panel-main">
+          <div class="panel-heading">
+            <div><p class="eyebrow">TRIAGEM</p><h2 id="queue-heading">Fila priorizada</h2></div>
+            <button id="filter-toggle" class="button" type="button" aria-expanded="false" aria-controls="filters">Filtros</button>
+          </div>
+          <form id="filters" class="filters" hidden>
+            <label>Status
+              <select id="filter-status">
+                <option value="">Todos</option><option>READY</option><option>LEASED</option>
+                <option>RETRY_WAIT</option><option>DEAD_LETTER</option><option>UNKNOWN</option>
+              </select>
+            </label>
+            <label>Risco
+              <select id="filter-risk">
+                <option value="">Todos</option><option>LOW</option><option>MEDIUM</option>
+                <option>HIGH</option><option>CRITICAL</option><option>UNKNOWN</option>
+              </select>
+            </label>
+            <div class="filter-actions"><button class="button button-primary" type="submit">Aplicar</button><button id="filter-reset" class="button" type="button">Limpar</button></div>
+          </form>
+          <div class="filter-summary">
+            <span id="active-filters">Sem filtros ativos.</span>
+            <span id="queue-count" role="status" aria-live="polite">Aguardando dados da fila.</span>
+            <button id="filter-clear-active" class="button button-compact" type="button" hidden>Limpar filtros</button>
+          </div>
+          <div id="queue-table" class="table-wrap" tabindex="0" aria-labelledby="queue-heading" aria-describedby="queue-count coverage-note">
+            <table>
+              <caption class="sr-only">Jobs operacionais priorizados por risco e idade dentro da janela declarada.</caption>
+              <thead><tr><th scope="col">Risco</th><th scope="col">Estado</th><th scope="col">Entidade</th><th scope="col">Erro</th><th scope="col">Atualização</th></tr></thead>
+              <tbody id="queue-body"><tr><td class="empty-cell" colspan="5">Carregando…</td></tr></tbody>
+            </table>
+          </div>
+        </article>
+
+        <aside class="side-stack">
+          <article class="panel">
+            <p class="eyebrow">DISTRIBUIÇÃO</p><h2>Risco dos eventos</h2>
+            <div id="risk-bars" class="bars" role="img" aria-label="Distribuição dos eventos por risco na janela"></div>
+          </article>
+          <article class="panel">
+            <p class="eyebrow">ESTADO</p><h2>Pipeline</h2>
+            <div id="status-bars" class="bars" role="img" aria-label="Distribuição dos eventos por estado na janela"></div>
+          </article>
+        </aside>
+      </section>
+      <p id="caveat" class="caveat"></p>
+      <div id="error" class="error" role="alert" hidden></div>
+    </main>
+    <?!= hkgkInclude_('App'); ?>
+  </body>
+</html>

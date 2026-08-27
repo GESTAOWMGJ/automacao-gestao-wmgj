@@ -1,0 +1,387 @@
+<script>
+  (function () {
+    'use strict';
+
+    var refreshTimer = null;
+    var requestSequence = 0;
+    var retryDelayMs = 30000;
+    var currentFilters = { status: '', risk: '' };
+    var lastGoodData = null;
+    var statusAllowed = ['', 'READY', 'LEASED', 'RETRY_WAIT', 'DEAD_LETTER', 'UNKNOWN'];
+    var riskAllowed = ['', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'UNKNOWN'];
+    var tableLabels = ['Risco', 'Estado', 'Entidade', 'Erro', 'Atualização'];
+    var els = {
+      main: document.getElementById('main'),
+      title: document.getElementById('insight-title'),
+      freshness: document.getElementById('freshness-badge'),
+      health: document.getElementById('health-badge'),
+      updated: document.getElementById('last-updated'),
+      snapshot: document.getElementById('snapshot-meta'),
+      components: document.getElementById('component-status'),
+      coverage: document.getElementById('coverage-note'),
+      pending: document.getElementById('metric-pending'),
+      dead: document.getElementById('metric-dead'),
+      receipts: document.getElementById('metric-receipts'),
+      success: document.getElementById('metric-success'),
+      queue: document.getElementById('queue-body'),
+      queueTable: document.getElementById('queue-table'),
+      queueCount: document.getElementById('queue-count'),
+      activeFilters: document.getElementById('active-filters'),
+      clearActive: document.getElementById('filter-clear-active'),
+      riskBars: document.getElementById('risk-bars'),
+      statusBars: document.getElementById('status-bars'),
+      caveat: document.getElementById('caveat'),
+      error: document.getElementById('error'),
+      filters: document.getElementById('filters'),
+      toggle: document.getElementById('filter-toggle'),
+      status: document.getElementById('filter-status'),
+      risk: document.getElementById('filter-risk'),
+      reset: document.getElementById('filter-reset'),
+      print: document.getElementById('print-dashboard')
+    };
+
+    function normalizeFilters(filters) {
+      var status = String(filters && filters.status || '').toUpperCase();
+      var risk = String(filters && filters.risk || '').toUpperCase();
+      return {
+        status: statusAllowed.indexOf(status) >= 0 ? status : '',
+        risk: riskAllowed.indexOf(risk) >= 0 ? risk : ''
+      };
+    }
+
+    function filtersFromAppsScriptLocation(locationObject) {
+      var parameters = locationObject && locationObject.parameter || {};
+      return normalizeFilters({ status: parameters.status || '', risk: parameters.risk || '' });
+    }
+
+    function filtersFromBrowserUrl() {
+      var params = new URLSearchParams(window.location.search || '');
+      return normalizeFilters({ status: params.get('status') || '', risk: params.get('risk') || '' });
+    }
+
+    function hasAppsScriptLocation() {
+      return typeof google !== 'undefined' && google.script && google.script.url && google.script.url.getLocation;
+    }
+
+    function hasAppsScriptHistory() {
+      return typeof google !== 'undefined' && google.script && google.script.history && google.script.history.push;
+    }
+
+    function readInitialFilters(callback) {
+      if (hasAppsScriptLocation()) {
+        try {
+          google.script.url.getLocation(function (locationObject) {
+            callback(filtersFromAppsScriptLocation(locationObject));
+          });
+          return;
+        } catch (error) {
+          /* Usa a URL local apenas em previews que não expõem a API do host. */
+        }
+      }
+      callback(filtersFromBrowserUrl());
+    }
+
+    function writeHistory(filters, mode) {
+      filters = normalizeFilters(filters);
+      var params = { v: '1' };
+      if (filters.status) params.status = filters.status;
+      if (filters.risk) params.risk = filters.risk;
+      if (hasAppsScriptHistory()) {
+        try {
+          google.script.history[mode === 'replace' ? 'replace' : 'push']({
+            v: 1,
+            status: filters.status,
+            risk: filters.risk
+          }, params, '');
+          return;
+        } catch (error) {
+          /* Preview sem integração de histórico: tenta a URL local. */
+        }
+      }
+      try {
+        var search = new URLSearchParams(params).toString();
+        window.history[mode === 'replace' ? 'replaceState' : 'pushState'](
+          { v: 1, status: filters.status, risk: filters.risk },
+          '',
+          window.location.pathname + (search ? '?' + search : '')
+        );
+      } catch (error) {
+        /* Preview sem permissão de histórico: mantém o estado apenas em memória. */
+      }
+    }
+
+    function registerHistoryHandler() {
+      if (hasAppsScriptHistory() && google.script.history.setChangeHandler) {
+        try {
+          google.script.history.setChangeHandler(function (event) {
+            restoreFilters(filtersFromAppsScriptLocation(event && event.location));
+          });
+          return;
+        } catch (error) {
+          /* Preview sem integração de histórico: usa popstate local. */
+        }
+      }
+      window.addEventListener('popstate', function () {
+        restoreFilters(filtersFromBrowserUrl());
+      });
+    }
+
+    function restoreFilters(filters) {
+      currentFilters = normalizeFilters(filters);
+      syncFilterControls();
+      renderFilterSummary();
+      load();
+    }
+
+    function syncFilterControls() {
+      els.status.value = currentFilters.status;
+      els.risk.value = currentFilters.risk;
+    }
+
+    function renderFilterSummary() {
+      var parts = [];
+      if (currentFilters.status) parts.push('status ' + currentFilters.status);
+      if (currentFilters.risk) parts.push('risco ' + currentFilters.risk);
+      els.activeFilters.textContent = parts.length ? 'Filtros ativos — ' + parts.join('; ') + '.' : 'Sem filtros ativos.';
+      els.clearActive.hidden = !parts.length;
+    }
+
+    function closeFilters() {
+      els.filters.hidden = true;
+      els.toggle.setAttribute('aria-expanded', 'false');
+    }
+
+    function commitFilters(filters) {
+      currentFilters = normalizeFilters(filters);
+      syncFilterControls();
+      renderFilterSummary();
+      writeHistory(currentFilters, 'push');
+      closeFilters();
+      els.queueTable.focus();
+      load();
+    }
+
+    function setBadge(element, prefix, state) {
+      state = String(state || 'UNKNOWN').toUpperCase();
+      element.textContent = prefix + ': ' + state;
+      element.className = 'badge badge-' + state.toLowerCase();
+    }
+
+    function load() {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+      if (document.hidden) return;
+      var sequence = ++requestSequence;
+      els.main.setAttribute('aria-busy', 'true');
+      els.error.hidden = true;
+      if (!lastGoodData) {
+        setBadge(els.freshness, 'Frescor', 'LOADING');
+        setBadge(els.health, 'Saúde', 'PARTIAL');
+      } else {
+        els.snapshot.textContent = 'Atualizando; último snapshot ' + formatDate(lastGoodData.generatedAt) + '.';
+      }
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        showError(sequence);
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(function (data) { if (sequence === requestSequence) render(data); })
+        .withFailureHandler(function () { if (sequence === requestSequence) showError(sequence); })
+        .HKGK_getDashboardSnapshot(currentFilters);
+    }
+
+    function render(data) {
+      lastGoodData = data;
+      currentFilters = normalizeFilters(data.filters || currentFilters);
+      syncFilterControls();
+      renderFilterSummary();
+      els.title.textContent = data.insightTitle || 'Estado operacional do Governance Kernel';
+      setBadge(els.freshness, 'Frescor', data.freshnessStatus || data.sourceStatus || 'OFFLINE');
+      setBadge(els.health, 'Saúde', data.healthStatus || 'PARTIAL');
+      els.updated.textContent = data.lastUpdated
+        ? 'Último sucesso confirmado: ' + formatDate(data.lastUpdated)
+        : 'Sem último sucesso confirmado';
+      els.snapshot.textContent = 'Snapshot gerado: ' + formatDate(data.generatedAt) + ' · atualização nominal: ' + Number(data.updateCadenceSeconds || 60) + ' s.';
+      els.pending.textContent = metricDisplay(data, 'pending');
+      els.dead.textContent = metricDisplay(data, 'deadLetters');
+      els.receipts.textContent = metricDisplay(data, 'receipts');
+      els.success.textContent = metricDisplay(data, 'successful');
+      els.coverage.textContent = data.windowLabel || 'Janela de leitura não informada.';
+      els.components.textContent = componentSummary(data.componentStatuses || [], data.invalidData || {});
+      els.caveat.textContent = data.caveat || '';
+      renderQueue(data.alertQueue || []);
+      renderQueueCount(data.queueMeta || {});
+      renderBars(els.riskBars, data.riskCounts || {}, ['UNKNOWN', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW']);
+      renderBars(els.statusBars, data.statusCounts || {}, ['UNKNOWN', 'READY', 'LEASED', 'RETRY_WAIT', 'DEAD_LETTER', 'SUCCEEDED']);
+      els.main.setAttribute('aria-busy', 'false');
+      retryDelayMs = Math.max(30000, Number(data.updateCadenceSeconds || 60) * 1000);
+      scheduleRefresh(retryDelayMs);
+    }
+
+    function metricDisplay(data, key) {
+      if (data.metricDisplays && Object.prototype.hasOwnProperty.call(data.metricDisplays, key)) {
+        return data.metricDisplays[key];
+      }
+      return String(Number(data.totals && data.totals[key] || 0));
+    }
+
+    function componentSummary(components, invalidData) {
+      var parts = components.map(function (component) {
+        return component.label + ': ' + component.freshness + '/' + component.health;
+      });
+      var invalidTotal = Number(invalidData.total || 0);
+      if (invalidTotal) parts.push('Ocorrências inválidas: ' + invalidTotal);
+      return parts.length ? 'Componentes — ' + parts.join(' · ') + '.' : 'Componentes ainda não avaliados.';
+    }
+
+    function renderQueueCount(meta) {
+      var returned = Number(meta.returned || 0);
+      var matches = Number(meta.totalMatches || 0);
+      var text = 'Exibindo ' + returned + ' de ' + matches + ' jobs correspondentes na janela.';
+      if (meta.resultTruncated) text += ' Resultado limitado a ' + Number(meta.limit || returned) + ' itens.';
+      if (meta.sourceTruncated) text += ' A origem excede a janela; podem existir outros jobs.';
+      els.queueCount.textContent = text;
+    }
+
+    function renderQueue(items) {
+      els.queue.replaceChildren();
+      if (!items.length) {
+        var empty = document.createElement('tr');
+        var emptyCell = document.createElement('td');
+        emptyCell.colSpan = 5;
+        emptyCell.className = 'empty-cell';
+        emptyCell.textContent = 'Nenhuma pendência encontrada nos filtros e na janela atuais.';
+        empty.appendChild(emptyCell);
+        els.queue.appendChild(empty);
+        return;
+      }
+      items.forEach(function (item) {
+        var tr = document.createElement('tr');
+        var values = [
+          item.riskLevel,
+          item.status,
+          item.entityType,
+          item.errorCode || '—',
+          item.updatedAt ? formatDate(item.updatedAt) : 'Indisponível'
+        ];
+        values.forEach(function (value, index) {
+          var td = document.createElement('td');
+          td.dataset.label = tableLabels[index];
+          if (index === 0) {
+            var risk = document.createElement('span');
+            risk.className = 'risk risk-' + String(value || 'unknown').toLowerCase();
+            risk.textContent = value || 'UNKNOWN';
+            td.appendChild(risk);
+          } else {
+            td.textContent = value;
+          }
+          tr.appendChild(td);
+        });
+        els.queue.appendChild(tr);
+      });
+    }
+
+    function renderBars(container, counts, order) {
+      container.replaceChildren();
+      var max = Math.max.apply(null, order.map(function (key) { return Number(counts[key] || 0); }).concat([1]));
+      container.setAttribute('aria-label', order.map(function (key) { return key + ': ' + Number(counts[key] || 0); }).join('; '));
+      order.forEach(function (key) {
+        var value = Number(counts[key] || 0);
+        var row = document.createElement('div');
+        var label = document.createElement('span');
+        var track = document.createElement('span');
+        var fill = document.createElement('span');
+        var amount = document.createElement('strong');
+        row.className = 'bar-row';
+        row.dataset.alert = String(key === 'UNKNOWN' || key === 'CRITICAL' || key === 'DEAD_LETTER');
+        label.textContent = key;
+        track.className = 'bar-track';
+        fill.className = 'bar-fill';
+        fill.style.width = Math.round(value / max * 100) + '%';
+        amount.textContent = String(value);
+        track.appendChild(fill);
+        row.appendChild(label);
+        row.appendChild(track);
+        row.appendChild(amount);
+        container.appendChild(row);
+      });
+    }
+
+    function formatDate(value) {
+      var date = new Date(value);
+      if (!value || Number.isNaN(date.getTime())) return 'Indisponível';
+      return date.toLocaleString('pt-BR', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
+      });
+    }
+
+    function showError(sequence) {
+      if (sequence !== requestSequence) return;
+      els.main.setAttribute('aria-busy', 'false');
+      setBadge(els.freshness, 'Frescor', 'OFFLINE');
+      setBadge(els.health, 'Saúde', 'DEGRADED');
+      retryDelayMs = Math.min(Math.max(30000, retryDelayMs * 2), 300000);
+      els.error.textContent = 'Não foi possível atualizar. O último estado permanece visível. Nova tentativa em ' + Math.round(retryDelayMs / 1000) + ' s.';
+      els.error.hidden = false;
+      scheduleRefresh(retryDelayMs);
+    }
+
+    function scheduleRefresh(delayMs) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
+      if (!document.hidden) refreshTimer = setTimeout(load, delayMs);
+    }
+
+    els.toggle.addEventListener('click', function () {
+      var open = els.filters.hidden;
+      els.filters.hidden = !open;
+      els.toggle.setAttribute('aria-expanded', String(open));
+      if (open) els.status.focus();
+    });
+    els.filters.addEventListener('submit', function (event) {
+      event.preventDefault();
+      commitFilters({ status: els.status.value, risk: els.risk.value });
+    });
+    els.filters.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        closeFilters();
+        els.toggle.focus();
+      }
+    });
+    els.reset.addEventListener('click', function () { commitFilters({}); });
+    els.clearActive.addEventListener('click', function () { commitFilters({}); });
+    els.print.addEventListener('click', function () { window.print(); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
+        requestSequence++;
+      } else {
+        load();
+      }
+    });
+    window.addEventListener('offline', function () {
+      clearTimeout(refreshTimer);
+      requestSequence++;
+      setBadge(els.freshness, 'Frescor', 'OFFLINE');
+      setBadge(els.health, 'Saúde', 'DEGRADED');
+      els.main.setAttribute('aria-busy', 'false');
+      els.error.textContent = 'Conexão indisponível. O último estado permanece visível.';
+      els.error.hidden = false;
+    });
+    window.addEventListener('online', function () {
+      retryDelayMs = 30000;
+      load();
+    });
+
+    registerHistoryHandler();
+    readInitialFilters(function (filters) {
+      currentFilters = normalizeFilters(filters);
+      syncFilterControls();
+      renderFilterSummary();
+      writeHistory(currentFilters, 'replace');
+      load();
+    });
+  }());
+</script>

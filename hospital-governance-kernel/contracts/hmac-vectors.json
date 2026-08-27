@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "algorithm": "HMAC-SHA256",
+  "canonical": "METHOD\\nPATH\\nTIMESTAMP\\nNONCE\\nBODY_SHA256",
+  "vectors": [
+    {
+      "name": "empty-json",
+      "method": "POST",
+      "path": "/internal/v1/governance/analyze",
+      "timestamp": "1787774400",
+      "nonce": "00000000-0000-4000-8000-000000000001",
+      "body": "{}",
+      "secret": "test-secret-never-use-in-production-0001",
+      "bodySha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "signature": "d31f1bf90165384635759dd28ddcd8cec1baa835917d423b8cced727f8a64e33"
+    }
+  ]
+}

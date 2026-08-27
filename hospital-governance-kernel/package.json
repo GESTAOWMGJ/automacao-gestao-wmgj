@@ -1,0 +1,11 @@
+{
+  "name": "wmgj-hospital-governance-kernel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "audit": "node tools/audit-kernel.mjs",
+    "validate": "npm run audit && npm test"
+  }
+}

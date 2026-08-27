@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wmgj.example/schemas/hkgk/governance-analysis-output-v1.json",
+  "title": "Governance Analysis Output v1",
+  "$comment": "Runtime contract is generated from GovernanceAnalysis in api/main.py; overallRisk is also validated to be at least the highest finding risk.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings", "missingEvidence", "overallRisk", "limitations", "requiresHumanReview"],
+  "properties": {
+    "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+    "findings": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code", "domain", "title", "description", "riskLevel", "evidenceRefs",
+          "facts", "assumptions", "recommendedActions"
+        ],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,63}$" },
+          "domain": { "enum": ["DOCUMENT", "CONTRACT", "BILLING", "GLOSS", "OPME", "QUALITY", "RUNTIME", "SECURITY"] },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+          "riskLevel": { "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+          "evidenceRefs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "maxLength": 96,
+              "pattern": "^(synthetic|drive|firestore|source)://sha256/[a-f0-9]{64}$"
+            }
+          },
+          "facts": { "type": "array", "items": { "type": "string" }, "maxItems": 30 },
+          "assumptions": { "type": "array", "items": { "type": "string" }, "maxItems": 30 },
+          "recommendedActions": { "type": "array", "items": { "type": "string" }, "maxItems": 30 }
+        }
+      }
+    },
+    "missingEvidence": { "type": "array", "items": { "type": "string" }, "maxItems": 100 },
+    "overallRisk": { "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+    "limitations": { "type": "array", "items": { "type": "string" }, "maxItems": 30 },
+    "requiresHumanReview": { "const": true }
+  }
+}

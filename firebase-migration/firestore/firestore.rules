@@ -103,6 +103,28 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      match /governanceCases/{caseId} {
+        allow read: if (
+          resource.data.sensitivity in ['PUBLIC', 'INTERNAL']
+          && roleIn(orgId, [
+            'platform_admin', 'org_admin', 'director', 'auditor',
+            'medical_auditor', 'finance', 'operator', 'viewer'
+          ])
+        ) || (
+          resource.data.sensitivity == 'RESTRICTED'
+          && roleIn(orgId, [
+            'platform_admin', 'org_admin', 'director', 'auditor',
+            'medical_auditor', 'finance', 'operator'
+          ])
+        ) || (
+          resource.data.sensitivity == 'CLINICAL_SENSITIVE'
+          && roleIn(orgId, [
+            'platform_admin', 'org_admin', 'director', 'auditor', 'medical_auditor'
+          ])
+        );
+        allow write: if false;
+      }
+
       match /clinicalEvidence/{evidenceId} {
         allow read: if roleIn(orgId, [
           'platform_admin', 'org_admin', 'director', 'auditor', 'medical_auditor'

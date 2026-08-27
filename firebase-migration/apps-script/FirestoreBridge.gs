@@ -82,6 +82,20 @@ function wmgjFirestoreEnviarEvento_(event) {
     var parsed = wmgjFirestoreParseJson_(text);
 
     if (code >= 200 && code < 300) {
+      var dispositionCount = (parsed && parsed.accepted === true ? 1 : 0)
+        + (parsed && parsed.duplicate === true ? 1 : 0);
+      var receiptValid = parsed && parsed.ok === true
+        && dispositionCount === 1
+        && Boolean(parsed.receiptId)
+        && Boolean(parsed.eventId)
+        && Boolean(parsed.entityId)
+        && Boolean(parsed.auditEventId)
+        && Number(parsed.aggregateVersion) >= 1
+        && /^[a-f0-9]{64}$/i.test(String(parsed.contentHash || ''))
+        && /^[a-f0-9]{64}$/i.test(String(parsed.semanticHash || ''));
+      if (!receiptValid) {
+        throw new Error('FIRESTORE_RECEIPT_INVALID:HTTP_' + code);
+      }
       wmgjFirestoreLog_('ENVIO', 'OK', {
         attempt: attempt,
         eventId: event.eventId,
@@ -123,6 +137,7 @@ function wmgjFirestoreEventoArquivo_(file, classification, context) {
     idempotencyKey: [cfg.orgId, 'DRIVE', sourceId, hash.value].join(':'),
     entityType: 'sourceDocument',
     entityKey: entityKey,
+    expectedVersion: Math.max(0, Number(context.expectedVersion || 0)),
     actor: {
       type: 'SYSTEM',
       id: Session.getEffectiveUser().getEmail() || 'apps-script',

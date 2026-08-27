@@ -17,6 +17,9 @@ Todo documento operacional deve conter:
 | `createdAt` | timestamp | servidor |
 | `updatedAt` | timestamp | servidor |
 | `migration` | map | evento, idempotência e origem |
+| `version` | integer | versão agregada incrementada na transação |
+| `expectedVersion` | integer | versão que o produtor espera antes do upsert; conflito retorna 409 |
+| `metadata` | object | contexto auditável reservado do envelope; `record` não pode declarar `metadata` nem outros campos canônicos do agregado |
 
 ## IA
 

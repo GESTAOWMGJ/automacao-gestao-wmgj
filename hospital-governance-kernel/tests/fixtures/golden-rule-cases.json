@@ -1,0 +1,32 @@
+[
+  {
+    "id": "missing-evidence",
+    "input": { "competence": "2026-08", "riskLevel": "LOW" },
+    "expectedFindingCodes": ["EVIDENCE_REQUIRED"],
+    "expectedRisk": "HIGH"
+  },
+  {
+    "id": "synthetic-opme-gap",
+    "input": {
+      "evidenceRefs": ["synthetic://evidence/001"],
+      "competence": "2026-08",
+      "opme": true,
+      "authorizationRef": "synthetic://authorization/001"
+    },
+    "expectedFindingCodes": ["OPME_EVIDENCE_SET"],
+    "expectedRisk": "CRITICAL"
+  },
+  {
+    "id": "matched-low-risk",
+    "input": {
+      "evidenceRefs": ["synthetic://evidence/001"],
+      "competence": "2026-08",
+      "reconciliationStatus": "MATCHED",
+      "billedAmount": 900,
+      "authorizedAmount": 900,
+      "riskLevel": "LOW"
+    },
+    "expectedFindingCodes": [],
+    "expectedRisk": "LOW"
+  }
+]

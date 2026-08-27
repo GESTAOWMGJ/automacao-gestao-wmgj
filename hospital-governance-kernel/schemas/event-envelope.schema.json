@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wmgj.example/schemas/hkgk/event-envelope-v1.json",
+  "title": "HKGK Event Envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "envelopeVersion", "eventId", "idempotencyKey", "contentHash", "orgId", "facilityId",
+    "eventType", "aggregate", "schemaVersion", "occurredAt", "producedAt", "correlationId",
+    "causationId", "traceId", "source", "classification", "evidenceRefs", "actor", "algorithm", "payload"
+  ],
+  "properties": {
+    "envelopeVersion": { "const": 1 },
+    "eventId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "idempotencyKey": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "orgId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$" },
+    "facilityId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "eventType": {
+      "enum": [
+        "GOVERNANCE_CASE_UPSERT", "AUDIT_FINDING_RECORDED", "ACTION_ITEM_UPSERT",
+        "APPROVAL_REQUESTED", "AI_RUN_RECORDED", "RUNTIME_CHECKPOINT"
+      ]
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "expectedVersion"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "expectedVersion": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "schemaVersion": { "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "producedAt": { "type": "string", "format": "date-time" },
+    "correlationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "causationId": { "type": "string", "maxLength": 128 },
+    "traceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "sourceId", "sourceVersion"],
+      "properties": {
+        "system": { "enum": ["DRIVE", "SHEETS", "GMAIL", "API", "MANUAL", "SYNTHETIC"] },
+        "sourceId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "sourceVersion": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sensitivity", "clinical"],
+      "properties": {
+        "sensitivity": { "enum": ["PUBLIC", "INTERNAL", "RESTRICTED", "CLINICAL_SENSITIVE"] },
+        "clinical": { "type": "boolean" }
+      }
+    },
+    "evidenceRefs": { "type": "array", "items": { "type": "string", "maxLength": 512 }, "maxItems": 200 },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "id", "roles"],
+      "properties": {
+        "type": { "enum": ["SYSTEM", "USER", "AI"] },
+        "id": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "roles": { "type": "array", "items": { "type": "string" }, "maxItems": 20 }
+      }
+    },
+    "algorithm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "ruleSetVersion", "promptVersion", "model"],
+      "properties": {
+        "version": { "type": "string" },
+        "ruleSetVersion": { "type": "string" },
+        "promptVersion": { "type": "string" },
+        "model": { "type": "string" }
+      }
+    },
+    "payload": { "type": "object" }
+  }
+}

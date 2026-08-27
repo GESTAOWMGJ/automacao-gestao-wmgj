@@ -89,6 +89,7 @@ function wmgjFirestoreMigrarAba_(ss, sheetName, config, limit, bridgeConfig) {
       idempotencyKey: [bridgeConfig.orgId, 'SHEETS', ss.getId(), sheetName, rowNumber, rowHash].join(':'),
       entityType: config.entityType,
       entityKey: entityKey,
+      expectedVersion: 0,
       actor: {
         type: 'SYSTEM',
         id: Session.getEffectiveUser().getEmail() || 'apps-script',

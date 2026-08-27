@@ -33,6 +33,7 @@
 
 - Apps Script continua gravando a planilha.
 - Ponte espelha fatos aceitos para Firestore de forma não bloqueante.
+- Antes de habilitar o bridge Drive, implementar e testar um state store durável que recarregue o último `aggregateVersion` confirmado por `entityKey`; o modo atual não deve inferir versão nem atualizar agregado com `expectedVersion=0`.
 - Firestore não devolve escrita à planilha nesta fase.
 - Dashboard de reconciliação compara as duas bases.
 

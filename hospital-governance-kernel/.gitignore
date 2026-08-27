@@ -1,0 +1,11 @@
+.clasp.json
+.clasprc.json
+.env
+.env.*
+node_modules/
+coverage/
+dist/
+api/.venv/
+api/.pytest_cache/
+api/**/__pycache__/
+api/**/*.pyc

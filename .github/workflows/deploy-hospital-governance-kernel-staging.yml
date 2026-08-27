@@ -1,0 +1,91 @@
+name: Deploy Hospital Governance Kernel Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Digite DEPLOY_HKGK_STAGING'
+        required: true
+        type: string
+      pause_total_confirmation:
+        description: 'Digite PAUSE_TOTAL_CONFIRMED após confirmar a pausa total do kernel'
+        required: true
+        type: string
+      triggers_removed_confirmation:
+        description: 'Digite TRIGGERS_REMOVED_CONFIRMED após remover todos os gatilhos HKGK_ do projeto HML'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hospital-governance-kernel-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      ${{ github.ref == 'refs/heads/main' &&
+          inputs.confirmation == 'DEPLOY_HKGK_STAGING' &&
+          inputs.pause_total_confirmation == 'PAUSE_TOTAL_CONFIRMED' &&
+          inputs.triggers_removed_confirmation == 'TRIGGERS_REMOVED_CONFIRMED' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: governance-kernel-staging
+    steps:
+      # TODO(supply-chain): pin actions/checkout to a reviewed full commit SHA.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # TODO(supply-chain): pin actions/setup-node to a reviewed full commit SHA.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate before deployment
+        working-directory: hospital-governance-kernel
+        run: npm run validate
+      - name: Validate isolated Apps Script target
+        env:
+          HGK_APPS_SCRIPT_ID_HML: ${{ secrets.HGK_APPS_SCRIPT_ID_HML }}
+          WMGJ_OPERATIONAL_SCRIPT_TARGET: ${{ secrets.WMGJ_OPERATIONAL_SCRIPT_ID }}
+        run: |
+          test -n "$HGK_APPS_SCRIPT_ID_HML"
+          test -n "$WMGJ_OPERATIONAL_SCRIPT_TARGET"
+          if [ "$HGK_APPS_SCRIPT_ID_HML" = "$WMGJ_OPERATIONAL_SCRIPT_TARGET" ]; then
+            echo 'Refusing to target the operational Apps Script project.' >&2
+            exit 1
+          fi
+      - name: Install clasp
+        run: npm install --global @google/clasp@3.4.0
+      - name: Configure clasp credentials
+        env:
+          HKGK_CLASPRC_JSON_HML: ${{ secrets.HKGK_CLASPRC_JSON_HML }}
+        run: |
+          test -n "$HKGK_CLASPRC_JSON_HML"
+          umask 077
+          printf '%s' "$HKGK_CLASPRC_JSON_HML" > ~/.clasprc.json
+      - name: Prepare isolated Apps Script project
+        env:
+          HGK_APPS_SCRIPT_ID_HML: ${{ secrets.HGK_APPS_SCRIPT_ID_HML }}
+        run: |
+          test -n "$HGK_APPS_SCRIPT_ID_HML"
+          mkdir -p build-hkgk
+          cp hospital-governance-kernel/appsscript.json build-hkgk/appsscript.json
+          cp hospital-governance-kernel/src/*.gs build-hkgk/
+          cp hospital-governance-kernel/src/*.html build-hkgk/
+          cat > build-hkgk/.clasp.json <<EOF
+          {
+            "scriptId": "$HGK_APPS_SCRIPT_ID_HML",
+            "rootDir": "."
+          }
+          EOF
+      - name: Push code only
+        working-directory: build-hkgk
+        run: clasp push --force
+      - name: Create immutable Apps Script version
+        working-directory: build-hkgk
+        run: clasp version "HKGK staging $GITHUB_SHA"
+      - name: Remove transient credentials
+        if: ${{ always() }}
+        run: rm -f ~/.clasprc.json
