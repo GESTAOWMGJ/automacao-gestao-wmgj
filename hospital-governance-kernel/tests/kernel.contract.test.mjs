@@ -363,6 +363,19 @@ test('deploy de staging é manual, isolado e não executa runtime', () => {
   assert.doesNotMatch(workflow, /HKGK_installStagingTriggers\s*\(/);
 });
 
+test('runbook mantém scan sintético com dispatch bloqueado e encerra em hard stop', () => {
+  const runbook = fs.readFileSync(path.join(root, 'docs/RUNBOOK.md'), 'utf8');
+  const prepare = runbook.indexOf("HKGK_pause('preparar corpus sintetico: <changeId>', 'DISPATCH')");
+  const generate = runbook.indexOf('HKGK_generateSyntheticFixtures()');
+  const scan = runbook.indexOf('HKGK_scanInboxTick()');
+  const resume = runbook.indexOf("HKGK_resume('canario sintetico dry-run aprovado: <changeId>')");
+  const hardStop = runbook.indexOf("HKGK_pause('fim do canario sintetico: <changeId>', 'ALL')");
+  assert.ok(prepare >= 0 && prepare < generate);
+  assert.ok(generate < scan && scan < resume && resume < hardStop);
+  assert.match(runbook, /soft pause \| `HKGK_pause\('motivo', 'DISPATCH'\)`/);
+  assert.match(runbook, /hard stop \| `HKGK_pause\('motivo', 'ALL'\)`/);
+});
+
 test('dashboard tem alternativa textual, URL Apps Script, export e estados degradados', () => {
   const html = ['Index.html', 'Styles.html', 'App.html'].map(file => fs.readFileSync(path.join(root, 'src', file), 'utf8')).join('\n');
   assert.match(html, /<table>/);

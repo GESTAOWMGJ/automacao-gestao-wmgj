@@ -23,3 +23,9 @@ test("published schema and runtime share required version and state enums", () =
   assert.equal(schema.properties.actor.additionalProperties, false);
   assert.equal(schema.properties.source.additionalProperties, false);
 });
+
+test("tenant allowlist fails closed when the deploy parameter is absent", () => {
+  const source = fs.readFileSync(new URL("../src/index.ts", import.meta.url), "utf8");
+  assert.match(source, /defineString\("WMGJ_ALLOWED_ORGS", \{ default: "" \}\)/);
+  assert.doesNotMatch(source, /defineString\("WMGJ_ALLOWED_ORGS", \{ default: "wmgj" \}\)/);
+});

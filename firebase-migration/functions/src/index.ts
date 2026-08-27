@@ -31,7 +31,8 @@ setGlobalOptions({
 
 const db = getFirestore();
 const HMAC_SECRET = defineSecret("WMGJ_INGEST_HMAC_SECRET");
-const ALLOWED_ORGS = defineString("WMGJ_ALLOWED_ORGS", { default: "wmgj" });
+// Fail closed: every deploy must declare its tenant allowlist explicitly.
+const ALLOWED_ORGS = defineString("WMGJ_ALLOWED_ORGS", { default: "" });
 const CLOCK_SKEW_SECONDS = 300;
 
 const ENTITY_COLLECTIONS: Record<string, string> = {

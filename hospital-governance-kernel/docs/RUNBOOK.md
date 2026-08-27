@@ -56,11 +56,12 @@ Aceitar somente se:
 ### 2. Gerar e preparar fixture
 
 ```javascript
+HKGK_pause('preparar corpus sintetico: <changeId>', 'DISPATCH');
 HKGK_generateSyntheticFixtures();
 HKGK_scanInboxTick();
 ```
 
-Inspecionar outbox, hash, idempotency key, sensibilidade, `synthetic=true` e ausência de identificador/segredo. Não liberar o kill switch se a evidência não estiver íntegra.
+O modo `DISPATCH` mantém o envio bloqueado, mas permite preparar e escanear o corpus. Inspecionar outbox, hash, idempotency key, sensibilidade, `synthetic=true` e ausência de identificador/segredo. Não liberar o kill switch se a evidência não estiver íntegra.
 
 ### 3. Exercitar dispatch somente dry-run
 
@@ -70,7 +71,7 @@ Registrar previamente `runId`, commit, config hash, owner e janela. Então:
 HKGK_resume('canario sintetico dry-run aprovado: <changeId>');
 HKGK_dispatchTick();
 HKGK_reconcileDaily();
-HKGK_pause('fim do canario sintetico: <changeId>');
+HKGK_pause('fim do canario sintetico: <changeId>', 'ALL');
 ```
 
 `HKGK_resume()` não é aprovação institucional: ele apenas altera a chave local. O change/approval ledger precisa existir no backend ou registro controlado separado.
@@ -85,7 +86,7 @@ HKGK_listOwnedTriggers();
 Instalar somente depois de exercício manual verde. Ao final da janela, remover e verificar:
 
 ```javascript
-HKGK_pause('encerramento da janela: <changeId>');
+HKGK_pause('encerramento da janela: <changeId>', 'ALL');
 HKGK_removeOwnedTriggers();
 HKGK_listOwnedTriggers();
 ```
@@ -96,8 +97,8 @@ O resultado final deve mostrar zero gatilho `HKGK_` quando a janela exigir hard 
 
 | Ação | Comando | Efeito esperado | Uso |
 |---|---|---|---|
-| soft pause | `HKGK_pause('motivo')` | ativa kill switch e bloqueia dispatch; scan/watchdog podem continuar | degradação controlada sem risco de ampliar exposição |
-| hard stop | `HKGK_pause(...)` + `HKGK_removeOwnedTriggers()` | interrompe handlers do kernel; preserva filas/evidência | P0/P1, dado indevido, cross-tenant, versão desconhecida |
+| soft pause | `HKGK_pause('motivo', 'DISPATCH')` | ativa kill switch e bloqueia dispatch; scan/watchdog podem continuar | degradação controlada sem risco de ampliar exposição |
+| hard stop | `HKGK_pause('motivo', 'ALL')` + `HKGK_removeOwnedTriggers()` | interrompe handlers do kernel; preserva filas/evidência | P0/P1, dado indevido, cross-tenant, versão desconhecida |
 | resume | `HKGK_resume('approval/changeId')` | libera somente se configuração local passar validação | apenas após go/no-go e em staging dry-run |
 
 Se a semântica observada divergir, tratar como incidente e não presumir funcionamento pelo nome do comando.
