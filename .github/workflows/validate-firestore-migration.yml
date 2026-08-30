@@ -1,0 +1,103 @@
+name: Validate Firestore Migration
+
+on:
+  pull_request:
+    paths:
+      - "firebase-migration/**"
+      - ".github/workflows/validate-firestore-migration.yml"
+  push:
+    branches:
+      - main
+      - feat/firestore-migration-foundation-20260826
+    paths:
+      - "firebase-migration/**"
+      - ".github/workflows/validate-firestore-migration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-firestore-migration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Build and test without deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            firebase-migration/functions/package-lock.json
+            firebase-migration/tests/package-lock.json
+
+      - name: Set up Java for Emulator Suite
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.33"
+          enable-cache: true
+          cache-dependency-glob: firebase-migration/api/uv.lock
+
+      - name: Validate configuration files
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n firebase-migration/scripts/bootstrap-homologacao.sh
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const files = [
+            "firebase-migration/firebase.json",
+            "firebase-migration/firestore/firestore.indexes.json",
+            "firebase-migration/functions/package.json",
+            "firebase-migration/functions/package-lock.json",
+            "firebase-migration/functions/tsconfig.json",
+            "firebase-migration/tests/package.json",
+            "firebase-migration/tests/package-lock.json"
+          ];
+          for (const file of files) {
+            JSON.parse(fs.readFileSync(file, "utf8"));
+          }
+          console.log("FIRESTORE_CONFIG_JSON_OK");
+          NODE
+
+      - name: Build Functions and run Security Rules tests
+        env:
+          WMGJ_FIREBASE_TEST_PROJECT_ID: wmgj-firestore-rules-test
+        run: bash firebase-migration/scripts/bootstrap-homologacao.sh
+
+      - name: Validate FastAPI, OpenAI contracts and dashboard
+        working-directory: firebase-migration/api
+        run: |
+          uv sync --locked --dev
+          uv run pytest
+          uv run python scripts/run_evals.py
+          node --check wmgj_api/static/dashboard.js
+          node --test tests/static/dashboard_static.test.mjs
+
+      - name: Confirm validation-only workflow
+        run: |
+          if grep -Eq 'firebase[[:space:]]+deploy|fastapi[[:space:]]+deploy' .github/workflows/validate-firestore-migration.yml; then
+            echo "Deploy command is forbidden in validation workflow" >&2
+            exit 1
+          fi
+          echo "VALIDATION_ONLY_OK"
