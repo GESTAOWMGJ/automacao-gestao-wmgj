@@ -58,11 +58,29 @@ jobs:
           enable-cache: true
           cache-dependency-glob: firebase-migration/api/uv.lock
 
-      - name: Validate configuration files
+      - name: Validate configuration and controlled launcher
         shell: bash
         run: |
           set -euo pipefail
           bash -n firebase-migration/scripts/bootstrap-homologacao.sh
+          bash -n firebase-migration/scripts/PROVISIONAR_FIREBASE_HOMOLOGACAO.command
+
+          launcher="firebase-migration/scripts/PROVISIONAR_FIREBASE_HOMOLOGACAO.command"
+          grep -Fq 'BLOCKED_NON_INTERACTIVE' "$launcher"
+          grep -Fq 'PREFIX="wmgj-hml-jfn"' "$launcher"
+          grep -Fq 'PRODUCTION_AUTHORIZED=NO' "$launcher"
+          grep -Fq 'set_env WMGJ_FIRESTORE_DRY_RUN true' "$launcher"
+          grep -Fq 'clinicalSensitiveEnabled":false' "$launcher"
+          grep -Fq 'productionMutation":false' "$launcher"
+          grep -Fq 'sourceMutation":false' "$launcher"
+          grep -Fq 'delete protection ENABLED' "$launcher"
+          grep -Fq 'requestNonces' "$launcher"
+
+          if grep -Eq 'firestore:delete|billing projects unlink|projects delete|rm -rf' "$launcher"; then
+            echo "Destructive command is forbidden in controlled homologation launcher" >&2
+            exit 1
+          fi
+
           node - <<'NODE'
           const fs = require("node:fs");
           const files = [
