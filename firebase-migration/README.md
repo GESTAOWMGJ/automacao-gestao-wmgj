@@ -60,9 +60,33 @@ FastAPI Control Plane (homologação)
 bash scripts/bootstrap-homologacao.sh
 ```
 
-O script exige Node 22 e Java 21+, usa lockfiles, compila as Functions e executa as Security Rules no Emulator Suite. Ele não faz login, configura segredo nem executa deploy. O workflow deste PR repete apenas essas validações.
+O script exige Node 22 e Java 21+, usa lockfiles, compila as Functions e executa as Security Rules no Emulator Suite. Ele não faz login, configura segredo nem executa deploy. O workflow repete apenas essas validações.
 
-A camada FastAPI é implantada separadamente e somente em homologação. O PR não inclui auto-deploy:
+## Provisionamento controlado de homologação
+
+Depois do merge, do CI verde e da instalação local WMGJ no Mac autorizado, use somente em terminal local interativo:
+
+```bash
+chmod 700 scripts/PROVISIONAR_FIREBASE_HOMOLOGACAO.command
+bash scripts/PROVISIONAR_FIREBASE_HOMOLOGACAO.command
+```
+
+O launcher:
+
+- aceita somente Project ID com prefixo `wmgj-hml-jfn-`;
+- bloqueia indicadores de produção;
+- exige autenticação Firebase, gcloud e ADC;
+- exige seleção local da conta de faturamento e duas confirmações literais;
+- cria orçamento de alerta com limiares de 50%, 80% e 100%;
+- cria Firestore Native com delete protection;
+- configura Secret Manager, Rules, índices, Functions e `organizations/wmgj`;
+- solicita TTL para `requestNonces.expiresAt`;
+- mantém dados clínicos desabilitados e Apps Script em `DRY_RUN=true`;
+- falha se não comprovar infraestrutura, organização, health check e controles de custo.
+
+Detalhes: `docs/15-provisionamento-controlado-homologacao.md`.
+
+A camada FastAPI é implantada separadamente e somente em homologação. Não existe auto-deploy:
 
 ```bash
 cd api
@@ -81,7 +105,7 @@ WMGJ_FIRESTORE_HMAC_KEY_ID=apps-script-homolog-2026-08
 WMGJ_FIRESTORE_HMAC_SECRET=<segredo longo e exclusivo>
 WMGJ_FIRESTORE_ORG_ID=wmgj
 WMGJ_FIRESTORE_DRY_RUN=true
-WMGJ_FIRESTORE_MAX_ROWS=50
+WMGJ_FIRESTORE_MAX_ROWS=10
 ```
 
 Depois execute:
@@ -93,7 +117,7 @@ wmgjFirestoreMigracaoDryRun(10);
 
 A virada para `WMGJ_FIRESTORE_DRY_RUN=false` só deve ocorrer no ambiente de homologação, depois dos testes das regras, da criação da organização `wmgj` e da validação dos totais.
 
-O backend recebe `WMGJ_INGEST_HMAC_KEYRING` como secret JSON rotacionável. Cada entrada contém `active`, `secret`, `orgIds` e `entityTypes`; o `keyId` do Apps Script deve apontar para uma entrada ativa e escopada. Antes da homologação, habilite também a política TTL do Firestore para `requestNonces.expiresAt`.
+O backend recebe `WMGJ_INGEST_HMAC_KEYRING` como secret JSON rotacionável. Cada entrada contém `active`, `secret`, `orgIds` e `entityTypes`; o `keyId` do Apps Script deve apontar para uma entrada ativa e escopada. A política TTL do Firestore deve ser habilitada para `requestNonces.expiresAt`.
 
 O primeiro backfill de Sheets usa `sourceVersion=1` como fotografia congelada. Qualquer alteração posterior da mesma entidade falha fechada; dual-write só pode começar depois que a fonte tiver uma coluna ou versionador monotônico durável por registro.
 
