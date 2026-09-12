@@ -15,6 +15,7 @@ MVP operacional para migrar gradualmente a base-mestra WMGJ para Cloud Firestore
 - trilha de auditoria encadeada por hash;
 - regras, índices, emuladores, seed e testes automatizados;
 - plano de migração incremental, mantendo Sheets/Apps Script como sistema vigente até o aceite de cada fase.
+- ponte Firebase em `shadow mode`, opt-in e fail-isolated, para SLA, governança e aprendizado supervisionado sem alterar a fonte oficial.
 
 Este MVP é estritamente operacional e não clínico. Dados identificáveis, prontuários, diagnósticos, OCR bruto e qualquer PHI ficam fora desta entrega.
 
@@ -30,6 +31,14 @@ flowchart LR
 ```
 
 O frontend pode ler projeções autorizadas. Toda mutação relevante passa pelas funções, com Auth, App Check, MFA quando exigido, autorização por tenant, idempotência e auditoria.
+
+## Implantação paralela WMGJ
+
+O arquivo `src/15_FIREBASE_SHADOW_WMGJ.gs` coleta somente contagens e indicadores agregados do pipeline V3. A ponte permanece desligada até que `WMGJ_FIREBASE_SHADOW_ENABLED` seja configurada como `true`. Mesmo ativa, uma falha de rede, contrato ou Firebase é registrada como `SHADOW_ERRO_ISOLADO` e não altera o retorno nem os dados do fluxo vigente.
+
+No Firebase, `ingestShadowSnapshot` valida contrato estrito, assinatura HMAC e janela antirreplay, grava o snapshot idempotente e calcula o SLA. Desvios criam uma `learning_observation` com `autoApplyAllowed=false`; nenhuma regra, prompt ou modelo é atualizado sem revisão e nova versão aprovada.
+
+Consulte [Rollout shadow](docs/migration/shadow-rollout.md) e [Aprendizado contínuo supervisionado](docs/governance/continuous-learning.md).
 
 ## Executar localmente
 

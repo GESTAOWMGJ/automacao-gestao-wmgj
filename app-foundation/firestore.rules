@@ -102,6 +102,24 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      match /shadow_snapshots/{snapshotId} {
+        allow get: if hasPermission(tenantId, "shadow.read")
+          && siteAllowed(tenantId, resource.data);
+        allow list: if hasPermission(tenantId, "shadow.read")
+          && siteAllowed(tenantId, resource.data)
+          && boundedList();
+        allow create, update, delete: if false;
+      }
+
+      match /learning_observations/{observationId} {
+        allow get: if hasPermission(tenantId, "learning.read")
+          && siteAllowed(tenantId, resource.data);
+        allow list: if hasPermission(tenantId, "learning.read")
+          && siteAllowed(tenantId, resource.data)
+          && boundedList();
+        allow create, update, delete: if false;
+      }
+
       match /audit_events/{eventId} {
         allow get: if hasPermission(tenantId, "audit.read")
           && siteAllowed(tenantId, resource.data);

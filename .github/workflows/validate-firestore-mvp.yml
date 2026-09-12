@@ -4,14 +4,20 @@ on:
   pull_request:
     paths:
       - "app-foundation/**"
+      - "src/**"
+      - "tools/audit-appscript.js"
       - ".github/workflows/validate-firestore-mvp.yml"
+      - ".github/workflows/deploy-firebase-shadow.yml"
   push:
     branches:
       - "main"
       - "codex/firestore-mvp"
     paths:
       - "app-foundation/**"
+      - "src/**"
+      - "tools/audit-appscript.js"
       - ".github/workflows/validate-firestore-mvp.yml"
+      - ".github/workflows/deploy-firebase-shadow.yml"
 
 permissions:
   contents: read
@@ -55,3 +61,7 @@ jobs:
 
       - name: Run Firestore rules tests
         run: npm run test:rules
+
+      - name: Verify Apps Script baseline remains coherent
+        working-directory: .
+        run: node tools/audit-appscript.js

@@ -309,3 +309,4 @@ export const onSourceCreated = onDocumentCreated(
 );
 
 export { classifySanitizedMetadata } from "./openai-classifier.js";
+export { ingestShadowSnapshot } from "./shadow-ingest.js";

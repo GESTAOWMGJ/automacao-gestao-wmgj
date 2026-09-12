@@ -4,8 +4,11 @@ on:
   pull_request:
     paths:
       - "app-foundation/**"
+      - "src/**"
+      - "tools/audit-appscript.js"
       - ".github/workflows/pr-clinical-readiness.yml"
       - ".github/workflows/deploy-production.yml"
+      - ".github/workflows/deploy-firebase-shadow.yml"
 
 permissions:
   contents: read
@@ -61,3 +64,19 @@ jobs:
             echo "Potential real-data marker found in test fixtures."
             exit 1
           fi
+
+  preserve-current-operation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - run: node tools/audit-appscript.js
+      - name: Confirm shadow remains opt-in and fail-isolated
+        run: |
+          grep -q 'WMGJ_FIREBASE_SHADOW_ENABLED' src/15_FIREBASE_SHADOW_WMGJ.gs
+          grep -q 'SHADOW_DISABLED' src/15_FIREBASE_SHADOW_WMGJ.gs
+          grep -q 'SHADOW_ERRO_ISOLADO' src/15_FIREBASE_SHADOW_WMGJ.gs
+          grep -q 'productionCutoverRequested: false' src/15_FIREBASE_SHADOW_WMGJ.gs

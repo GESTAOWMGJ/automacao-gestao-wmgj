@@ -36,6 +36,8 @@ async function seed(): Promise<void> {
         "dashboard.read",
         "validation.read",
         "audit.read",
+        "shadow.read",
+        "learning.read",
       ],
       allSites: true,
       siteIds: [],
@@ -43,7 +45,7 @@ async function seed(): Promise<void> {
     });
     await setDoc(doc(firestore, "tenants/tenant-a/members/user-site"), {
       status: "ACTIVE",
-      permissions: ["dashboard.read", "validation.read", "audit.read"],
+      permissions: ["dashboard.read", "validation.read", "audit.read", "shadow.read", "learning.read"],
       allSites: false,
       siteIds: ["site-alpha"],
       expiresAt: future,
@@ -82,6 +84,18 @@ async function seed(): Promise<void> {
     await setDoc(
       doc(firestore, "tenants/tenant-a/audit_events/event-beta"),
       { siteId: "site-beta", action: "SYNTHETIC" },
+    );
+    await setDoc(
+      doc(firestore, "tenants/tenant-a/shadow_snapshots/snapshot-alpha"),
+      { siteId: "site-alpha", status: "PASS" },
+    );
+    await setDoc(
+      doc(firestore, "tenants/tenant-a/shadow_snapshots/snapshot-beta"),
+      { siteId: "site-beta", status: "REVIEW_REQUIRED" },
+    );
+    await setDoc(
+      doc(firestore, "tenants/tenant-a/learning_observations/learning-alpha"),
+      { siteId: "site-alpha", status: "PENDING_HUMAN_REVIEW" },
     );
     await setDoc(doc(firestore, "tenants/tenant-b"), {
       status: "ACTIVE",
@@ -224,6 +238,25 @@ describe("firestore.rules", () => {
         doc(firestore, "tenants/tenant-a/audit_events/event-1"),
         { siteId: null, action: "ALTERED" },
       ),
+    );
+  });
+
+  it("restringe shadow e aprendizado à unidade e nega escrita direta", async () => {
+    const firestore = environment.authenticatedContext("user-site").firestore();
+    await assertSucceeds(
+      getDoc(doc(firestore, "tenants/tenant-a/shadow_snapshots/snapshot-alpha")),
+    );
+    await assertFails(
+      getDoc(doc(firestore, "tenants/tenant-a/shadow_snapshots/snapshot-beta")),
+    );
+    await assertSucceeds(
+      getDoc(doc(firestore, "tenants/tenant-a/learning_observations/learning-alpha")),
+    );
+    await assertFails(
+      setDoc(doc(firestore, "tenants/tenant-a/shadow_snapshots/direct-write"), {
+        siteId: "site-alpha",
+        status: "PASS",
+      }),
     );
   });
 

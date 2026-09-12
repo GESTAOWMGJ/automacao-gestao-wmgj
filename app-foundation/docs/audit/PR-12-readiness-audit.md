@@ -33,6 +33,25 @@
 No deploy, migration, production credential, Gmail, Drive, Sheets or real
 Firestore access occurred.
 
+## Incremento shadow — 2026-09-12 UTC
+
+- Apps Script V3 preservado como sistema oficial.
+- Ponte Firebase agregada adicionada atrás de feature flag desligada por padrão.
+- Ingestão protegida por contrato estrito, HMAC, janela temporal e idempotência.
+- Avaliação de SLA versionada gera somente observação pendente de revisão humana.
+- Workflow de homologação preparado com `dry_run=true`, SHA imutável, ambiente protegido, allowlist de projeto e autenticação federada.
+- Nenhum projeto Firebase, segredo, recurso, gatilho Apps Script ou dado real foi criado ou alterado nesta execução.
+
+### Evidência local do incremento
+
+- Functions TypeScript: compilação aprovada.
+- Frontend React/TypeScript: build aprovado.
+- Testes unitários e contratuais: 17/17 aprovados.
+- Auditoria estática e sintática do Apps Script: aprovada, sem erros; diretórios legados permanecem apenas como aviso preexistente.
+- YAML dos workflows: sintaxe aprovada.
+- `git diff --check`: aprovado.
+- Firestore Rules local: não executado porque o executor oferece Java 17 e a versão atual do Emulator Suite exige Java 21; o workflow do PR instala Java 21 e permanece como evidência obrigatória antes de aprovação.
+
 ## Post-change local evidence
 
 - FastAPI tests: 5/5 passed; OpenAPI exposes only `GET /health` and
