@@ -1,0 +1,19 @@
+{
+  "product": "AURORA NEXUS",
+  "version": "1.0.0-RC1",
+  "consolidation_date": "2026-09-18",
+  "registration_source": {
+    "file": "AURORA_NEXUS_REGISTRATION_SOURCE_v1.0.0-RC1.txt",
+    "bytes": 29405,
+    "algorithm_primary": "SHA-512",
+    "sha512": "cc1ff31d2985acb43b5ba94a3ff3309df8909b71c57ea2ffdd68140050720f3ec52cd01675432428aa99657c0b96cef4113361ac108130b9c553da9f461e3df4",
+    "algorithm_secondary": "SHA-256",
+    "sha256": "c35ae4857b0b5aa86aa1bb32cb77dd85a96aeda73a680ec41eb0a3957cf2da9d",
+    "reproducibility_check": "PASS"
+  },
+  "provenance": {
+    "base_commit": "f789dc5694d63d2311b339f3c5bf4485219d2f2c",
+    "integration_commit": "7fac0be36abdbd53e741dfbc5f2ce6ed612f0ff0",
+    "production_changed": false
+  }
+}
