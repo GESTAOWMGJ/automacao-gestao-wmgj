@@ -1,115 +1,117 @@
 # AURORA NEXUS — decisão de execução HML
 
-Estado: NO-GO. A request v6 foi executada parcialmente e falhou de modo fechado
-antes de qualquer amostra real. Sistema-mãe AURORA NEXUS; piloto WMGJ Operação.
-Baseline executada: main `f8699caa254ed058fea67beff2d275f51602b394`,
-run `37092175109`. A reconciliação do PR #98 ainda exige SHA final e novo CI.
+Estado: **NO-GO**. AURORA NEXUS permanece o sistema-mãe; WMGJ Operação,
+o piloto. Baseline remota verificada em 03/10/2026: `main`
+`91665cc94c4bde9b82a75cd39905263c60e02191`.
 
-## Sequência concreta
+## Fato novo e contenção
 
-1. Revisar o SHA final do PR #98 e os cinco checks; não reutilizar CI de SHA
-   anterior. Os três alertas CodeQL encontrados nesta revisão dizem respeito a
-   expressões regulares de URLs em testes estáticos. As verificações foram
-   convertidas em comparações literais do código-fonte; aguardar novo scan.
-2. Aprovar separadamente a integração da candidata e a publicação HML. Atenção:
-   integrar arquivos `src/*.gs` ou `tools/*.sh` na main aciona o workflow
-   `Deploy Apps Script WMGJ`. A aprovação de merge precisa incluir essa
-   publicação automática HML; não é uma operação apenas documental.
-3. Implantar a versão corrigida das Functions pelo fluxo HML protegido e
-   comprovar os gates abaixo. O RC1.1 não publica o conjunto completo de
-   Functions; pode reimplantar somente `ingestWmgjEvent` sob aprovação explícita
-   de migração. Publicar apenas Hosting/Rules não leva as demais correções de
-   política e cálculo ao backend.
-4. Só após comprovar runtime, recuperação, identidade e escopo, criar uma
-   request v7 em mudança separada. `approvedBaseSha` deve ser o primeiro pai
-   real do futuro commit da request, após a integração/implantação aprovadas;
-   não antecipar esse SHA. A request v6 presente na main é registro histórico e
-   permanece byte a byte inalterada nesta candidata.
-5. Submeter o run novo a aprovação humana separada no ambiente protegido, com
-   a versão e os efeitos abaixo visíveis. Não reutilizar nem reexecutar as
-   requests/runs anteriores.
+A segunda tentativa do [run v7 37093409122](https://github.com/GESTAOWMGJ/automacao-gestao-wmgj/actions/runs/37093409122/attempts/2),
+no SHA `91665cc94c4bde9b82a75cd39905263c60e02191`, terminou em falha
+em 03/10/2026, 11:41 BRT. O job `111221038336` e seus logs foram consultados
+em leitura. Esta revisão não disparou nem aprovou a execução.
 
-## Escopo da futura execução RC1.1 v7 (não executado por esta candidata)
+### Comprovado nesta tentativa
 
-Restauração real para banco temporário HML e cleanup desse banco; verificação do
-runtime existente; deploy Hosting/Rules/indexes; configuração da ponte Apps
-Script; eventual migração autorizada de um segredo legado reconhecido para uma
-nova versão do keyring existente, seguida de redeploy somente da ingestão (sem
-criar secret ou alterar IAM); envio limitado ao par fiscal/bancário já previsto;
-reconciliação, projeção SHADOW e kill switch. Cada efeito exige aprovação
-específica da request. Nenhum backfill genérico, produção, fonte ou dado clínico.
+- WIF, pré-requisitos, restore e cleanup concluíram com sucesso nos passos do job.
+- A etapa de Hosting/Rules/indexes concluiu com mensagem de deploy completo;
+  isso não comprova smoke autenticado ou homologação de toda a aplicação.
+- Às 11:41:16 BRT, o Secret Manager confirmou a criação de uma nova versão do
+  keyring existente. Portanto houve mutação parcial no HML; não descrever este
+  run como sem alterações.
+- Às 11:41:44 BRT, o redeploy pelo Firebase CLI falhou com HTTP 403,
+  `secretmanager.secrets.setIamPolicy` negado no recurso do keyring.
+  A mensagem não demonstra ausência do segredo; a criação de versão foi
+  confirmada separadamente.
+- Amostra real, reconciliação, SHADOW, teste de inteligência, verificação final
+  do kill switch e upload de artefato ficaram skipped. Não há recibo de
+  ingestão deste run nem comprovação atual do estado final do DRY_RUN.
 
-A futura solicitação deve nascer inativa para revisão e só receber
-`candidateOnly=false` no commit imutável autorizado. O executor exige confirmação
-literal, request v7 nova, `approvedBaseSha` igual ao primeiro pai e tentativa
-inicial. Preparar conteúdo não autoriza execução.
+O gate inicial foi registrado como success. A previsão anterior de que ele
+impediria toda mutação não se confirmou e foi retirada deste documento.
+Não aprovar ou reexecutar a v7 como remediação: ela pode gerar outra versão
+de segredo e repetir alterações já concluídas.
 
-## Reconciliação do run v6 existente
+### Pendência material de reconciliação do keyring/runtime
 
-O run `37092175109`, disparado pela main antes desta reconciliação, terminou com
-falha no gate da ponte Apps Script (exit 77): o valor HMAC existente não era JSON
-de keyring aceito nem legado hexadecimal de 64 caracteres. Restore e cleanup do
-banco temporário passaram, e Hosting/Rules/indexes foram publicados. Não houve
-migração de versão do secret, ativação de escrita, amostra real, reconciliação,
-SHADOW, Native Intelligence ou upload final de evidência. Resolver o formato por
-um fluxo revisado e revalidar os efeitos já ocorridos são pré-requisitos para uma
-request v7; não corrigir o secret dentro desta candidata de código.
+| Campo | Registro |
+| --- | --- |
+| Estado | FALHA COMPROVADA de autorização IAM durante o redeploy; consistência entre versão do segredo, revisão ativa da Function e ponte Apps Script DESCONHECIDA |
+| Evidência | run/attempt/job acima; criação de versão seguida de HTTP 403; etapas de ingestão skipped |
+| Risco | consumir uma versão diferente da ponte ou repetir rotação sem concluir o redeploy; não foi comprovado que esse descompasso ocorreu |
+| Responsável sugerido | plataforma/segurança, com mantenedor Firebase/Apps Script |
+| Próxima ação | inspecionar somente metadados das versões do keyring, secretEnvironmentVariables/revision/service account da Function e policy do segredo; conferir estado sanitizado da ponte e DRY_RUN por canal autorizado |
+| Critério de aceite | versão canônica e consumidores reconciliados, acesso mínimo efetivo comprovado, revisão implantada identificada e prova HMAC sem escrita aprovada; depois preencher IDs da candidata |
+| Bloqueador real | Firebase CLI solicitou setIamPolicy e recebeu 403; falta leitura administrativa atual para determinar binding existente e remediação mínima; gcloud indisponível neste runner |
+| Limite da ação | não conceder papéis amplos, alterar IAM, gerar nova chave/versão, reiniciar fluxo, publicar Function ou modificar ponte automaticamente |
 
-## Gates e bloqueadores reais
+No PR #107 a v8 já separa publicação do runtime e consumo do keyring; seus
+testes impedem criação de versões, alterações de IAM e redeploy de ingestão
+dentro do RC1.1. Isso evita esse caminho na candidata, mas não corrige a
+permissão nem reconcilia o estado cloud por si só. O deploy protegido próprio
+também exige avaliação de IAM antes de qualquer execução autorizada.
 
-| Gate | Evidência atual | Próxima ação / aceite | Responsável sugerido |
-| --- | --- | --- | --- |
-| Código | CI no PR; aprovação humana pendente | cinco checks e revisão no SHA final | mantenedor/revisor |
-| Billing/orçamento | desconhecido nesta sessão | comprovar billing e orçamento/alertas sem mutação | administrador HML |
-| WIF/service account | autenticação WIF comprovada no run `37092175109`; menor privilégio integral não auditado | revisar permissões efetivas antes de nova execução | cloud/IAM |
-| Secrets/API | leitura do keyring ocorreu, mas o formato foi rejeitado com exit 77; nenhum valor deve ser publicado | diagnosticar formato por canal seguro e definir migração explícita, sem ampliar IAM | cloud/IAM |
-| Usuário/membership/MFA/App Check | não comprovado na candidata | smoke real autorizado; nega anônimo e outro tenant; valida MFA | QA/segurança |
-| Rules e runtime | runtime da main verificado e Hosting/Rules/indexes publicados no run v6; Functions da candidata não publicadas | publicar Functions corrigidas pelo fluxo próprio e repetir smoke no SHA integrado | backend |
-| Backup/restore | backup recente, restore real temporário e cleanup comprovados no run v6 | repetir o gate na futura request v7; evidência anterior não autoriza nova amostra | operações |
-| Proteção GitHub | main retornou protected=false; ambiente pediu aprovação, mas permite self-review e bypass administrativo | required checks e revisor humano separado sem autoaprovação antes da promoção | administrador GitHub |
-| DNS/HTTPS/SSL | pendências da issue #32, sem nova inspeção neste patch | evidência atual dos destinos autorizados | infraestrutura |
-| iMac | cadastro/despacho não comprovam execução | PR #95 atualizado, diagnóstico local, teste nativo e rollback | desktop/titular |
+A request operacional v7 permanece byte a byte inalterada. O modelo v8 em
+`docs/requests/aurora-rc11-v8.candidate.json` continua inativo, com aprovações
+false e valores não comprovados null. Nenhuma autorização antiga preenche
+automaticamente seus gates. O histórico v6 permanece apenas como evidência
+anterior; não substitui esta observação mais recente.
 
-Não há gcloud autenticado ou API Firebase administrativa disponível neste
-ambiente de execução. Isso impede verificar gates cloud atuais por leitura;
-não prova falta de recurso. O smoke real e o ensaio Mac precisam devolver
-resultado verificável. Não registrar credenciais, e-mails, dados clínicos ou
-links privados no PR.
+## Ordem obrigatória
 
-## Limites de aceite
+1. Revisar e integrar separadamente o PR #98, já reconciliado com a `main`.
+2. Revisar o hardening v8 empilhado: nenhuma mudança em request; acesso da
+   Execution API restrito ao implantador; DRY_RUN global sempre preservado;
+   par exato vinculado a hashes/linhas/idempotência; autorização HMAC efêmera;
+   receipt durável reivindicado como `IN_PROGRESS` antes do primeiro POST e
+   consumido somente após os dois envios; runtime e deployment pinados.
+3. Confirmar no deploy protegido que `CLASPRC_JSON` pertence ao implantador
+   compatível com `executionApi.access=MYSELF`. Falha mantém NO-GO.
+4. Publicar Apps Script e backend pelo fluxo próprio, em SHA revisado, sem usar
+   RC1.1 para criar segredo, alterar IAM, configurar ponte ou publicar Function.
+5. Executar a inspeção **somente leitura** do par candidato, revisar por humano
+   as duas linhas e registrar o contrato fechado: parent hash, row/content hash,
+   hashes de idempotência e `pairBindingSha256`.
+6. Criar a request v8 em um commit request-only cujo primeiro pai seja exatamente
+   o SHA implantado. O predecessor v7 precisa conservar SHA-256
+   `42b2a0628b8b8debd3a1becc462724b69fa5762208d64c8852fb2e1e26369c10`.
+7. Somente depois submeter o run a aprovação humana separada no ambiente
+   protegido. O autor da request não deve autoaprovar nem usar bypass.
 
-CI, revisão de código, implantação, instalação local, ingestão real e release
-comercial são estados separados. Boot patcher multiplataforma, App Check ponta a
-ponta e instalação nativa continuam sem comprovação de execução. Não promover
-essas capacidades por existência de contrato, documentação ou disparo remoto.
+## Escopo permitido da futura v8
 
-## Incremento sem Mac
+- restaurar backup elegível em banco temporário e comprovar cleanup;
+- validar runtime já publicado e implantar apenas Hosting/Rules/indexes;
+- consumir keyring canônico existente, sem Secret Manager mutation;
+- validar deployment Apps Script e revisão de `ingestWmgjEvent` pinados;
+- manter o DRY_RUN global em `true` durante toda a execução;
+- enviar exatamente um par fiscal/bancário previamente atestado e consumir um
+  receipt ligado ao SHA/request e ao binding do par;
+- reconciliar documentos, habilitar somente projeção SHADOW e testar a
+  inteligência nativa.
 
-O coletor `firebase-migration/scripts/hml_readonly_preflight.py` permite auditar
-metadados do HML sem ler valores de secrets. Não substitui o preflight protegido
-do deploy nem comprova acesso efetivo do runtime. Nesta sessão retornou
-`GCLOUD_UNAVAILABLE`; nenhum dos gates cloud foi promovido.
+Os dois POSTs são idempotentes, porém **não atômicos**. Falha parcial deixa o
+receipt bloqueado e exige nova request/revisão humana; não autoriza retry cego.
+Backfill genérico, produção, dado clínico, mutação da fonte, segredo/IAM,
+redeploy de Function e reconfiguração da ponte permanecem fora do escopo.
 
-O gate de backup compartilhado agora exige validade de até 24h, expiração futura
-e mesmo databaseUid, antes de deploy ou restore. Deploy sem backup elegível não
-possui mais exceção automática. Detalhes e limites estão nos documentos 38 e 39
-de `firebase-migration/docs`; o boot possui núcleo de observação read-only,
-sem endpoint ou executor. Sua integração real permanece pendente.
+## Gates vigentes
 
-Leitura GitHub em 03/10/2026: main `protected=false` e lista de rulesets visíveis
-vazia. A configuração do ambiente `firebase-homologation` continua sem revalidação
-administrativa. Esses escopos são distintos; não inferir proteção do ambiente
-pelo estado da branch nem alterar permissões automaticamente.
+| Gate | Estado | Aceite antes da v8 |
+| --- | --- | --- |
+| Código/CI | PRs #95, #98 e #99 reconciliados; novos heads exigem CI próprio | checks verdes e revisão humana nos SHAs finais |
+| Workflow | YAML e 12 blocos shell validados; hardening ainda draft | teste integral, unicidade dos passos e CodeQL no head final |
+| Billing/orçamento | DESCONHECIDO nesta sessão | leitura atual de billing e orçamento/alertas |
+| WIF/service account | WIF funcionou na tentativa 2 da v7; setIamPolicy foi negado no redeploy | revisar identidade e permissões efetivas |
+| Secret/keyring | v7 criou versão, mas redeploy falhou; consumidores ainda não reconciliados | keyring canônico existente e escopo verificado sem expor valor |
+| Apps Script | acesso `MYSELF` ainda não implantado/provado | deployer canônico executa nondev; terceiros não executam |
+| Usuários/MFA/App Check | DESCONHECIDO | smoke autenticado, nega anônimo/outro tenant e valida MFA |
+| Backup/restore | restore e cleanup concluídos na tentativa 2 da v7 | repetir gate de backup e restore no run v8 aprovado |
+| GitHub | branch retornou sem proteção; ambiente permitia self-review/bypass | required checks e aprovador humano separado |
+| DNS/HTTPS/SSL | issue #32 continua pendente | evidência atual dos destinos autorizados |
+| Mac/iMac | PR #95 reconciliado; instalação/round-trip/restart/rollback pendentes | ensaio nativo autorizado com saída correlacionada |
 
-## Núcleo de observação do boot — candidata
-
-O módulo `api/wmgj_api/boot_observer.py` valida o contrato canônico e o vínculo
-entre contexto server-side, manifesto e evidências. A saída pública é minimizada;
-o evento de auditoria é apenas uma intenção privada com persisted=false.
-Nenhuma rota, fonte real, escrita ou atualização de aplicativo foi conectada.
-Os testes exercitam fontes sintéticas; não validam Auth/App Check/Firestore reais.
-
-Próximo gate de código: adaptador consistente sobre o checkpoint existente,
-revogação atual, empacotamento da fonte canônica e transporte que exponha somente
-public_status. Próximo gate operacional: smoke autenticado autorizado em HML.
-O Release Cockpit não recebe promoção de prontidão operacional por esse núcleo.
+Ausência de acesso é DESCONHECIDO, não falha comprovada. CI, merge, deploy,
+ingestão, instalação local e release comercial são estados separados. Nenhuma
+request operacional v8 deve ser criada enquanto o hardening, o deploy e a evidência do par
+não estiverem concluídos.
